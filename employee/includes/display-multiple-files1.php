@@ -380,6 +380,17 @@ if($totalCustomerOrderFils > 1){
 		// check if the order folder exists
 		if (is_dir($downloadPathInfo['dirname']) && file_exists($downloadPathInfo['dirname']) && file_exists($downloadPath)) {
 			$downloadPath           =   $downloadPathInfo['dirname'] . "/ocrFiles/$downloadFileName";
+			$statusFilePath = $downloadPathInfo['dirname'] . "/ocr-processing-status.json";
+			$statusData = null;
+			
+			// Check for status file
+			if(file_exists($statusFilePath)) {
+				$statusContent = @file_get_contents($statusFilePath);
+				if($statusContent) {
+					$statusData = json_decode($statusContent, true);
+				}
+			}
+			
 			if(file_exists($downloadPath)) {
 				?>
 				<tr>
@@ -389,14 +400,156 @@ if($totalCustomerOrderFils > 1){
 					</td>
 				</tr>
 
-				<?php } else { ?>
-				<tr>
-					<td>&nbsp;</td>
-					<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
-						(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>');" title="Get AI-Extracted Property Details" style="cursor:pointer;"><b>Get AI-Extracted Property Details</b></a>)
-					</td>
-				</tr>
-				<?php }
+				<?php } else { 
+					// Check status file for errors or processing status
+					$jobId = null;
+					if($statusData && isset($statusData['jobId']) && !empty($statusData['jobId']))
+					{
+						$jobId = $statusData['jobId'];
+					}
+					// Also check in response object
+					if(empty($jobId) && $statusData && isset($statusData['response']['jobId']) && !empty($statusData['response']['jobId']))
+					{
+						$jobId = $statusData['response']['jobId'];
+					}
+					if(empty($jobId) && $statusData && isset($statusData['response']['job_id']) && !empty($statusData['response']['job_id']))
+					{
+						$jobId = $statusData['response']['job_id'];
+					}
+					
+					if($statusData && isset($statusData['success'])) {
+						// Check response status to determine if we should poll
+						$responseStatus = null;
+						if(isset($statusData['response']['status']))
+						{
+							$responseStatus = $statusData['response']['status'];
+						}
+						elseif(isset($statusData['response']['data']['status']))
+						{
+							$responseStatus = $statusData['response']['data']['status'];
+						}
+						
+						// If we have jobId OR status is pending/processing, start polling
+						// Also check if success is false but we have jobId (HTTP 201 case)
+						if($jobId || in_array(strtolower($responseStatus), array('pending', 'processing', 'in_progress')) || ($statusData['success'] == false && $jobId))
+						{
+							// Job ID exists or status indicates processing, start polling automatically
+							?>
+							<tr>
+								<td>&nbsp;</td>
+								<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
+									<span style="color:#0080C0;"><b>Property Details Extraction in Progress...</b></span> <img src="<?php echo SITE_URL;?>/images/loading.gif" border="0" style="vertical-align:middle;width:20px;">
+								</td>
+							</tr>
+							<script type="text/javascript">
+							// Auto-start polling when page loads if jobId exists or status is pending/processing
+							(function() {
+								var orderId = <?php echo $orderId; ?>;
+								var encodeOrderID = '<?php echo $encodeOrderID; ?>';
+								var mD5OrderID = '<?php echo $M_D_5_ORDERID; ?>';
+								var mD5ID = '<?php echo $M_D_5_ID; ?>';
+								var jobId = '<?php echo $jobId ? htmlspecialchars($jobId, ENT_QUOTES) : 'null'; ?>';
+								
+								// Wait for DOM to be ready
+								if(document.readyState === 'loading') {
+									document.addEventListener('DOMContentLoaded', function() {
+										setTimeout(function() {
+											if(typeof checkOCRFileStatus === 'function') {
+												checkOCRFileStatus(orderId, 'ocrStatusContainer_' + orderId, encodeOrderID, mD5OrderID, mD5ID, jobId !== 'null' ? jobId : null);
+											}
+										}, 500);
+									});
+								} else {
+									setTimeout(function() {
+										if(typeof checkOCRFileStatus === 'function') {
+											checkOCRFileStatus(orderId, 'ocrStatusContainer_' + orderId, encodeOrderID, mD5OrderID, mD5ID, jobId !== 'null' ? jobId : null);
+										}
+									}, 500);
+								}
+							})();
+							</script>
+							<?php
+						}
+						elseif($statusData['success'] == false) {
+							// Processing failed - show error and retry option
+							$errorMessage = isset($statusData['message']) ? htmlspecialchars($statusData['message']) : 'Unknown error occurred';
+							$timestamp = isset($statusData['timestamp']) ? htmlspecialchars($statusData['timestamp']) : '';
+							?>
+							<tr>
+								<td>&nbsp;</td>
+								<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>" style="color: red;">
+									<span style="color: red;"><b>Error:</b> <?php echo $errorMessage; ?></span>
+									<?php if($timestamp): ?>
+										<br><span style="font-size: 11px; color: #666;">(Last attempted: <?php echo $timestamp; ?>)</span>
+									<?php endif; ?>
+									<br>(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>', null);" title="Retry AI Extraction" style="cursor:pointer; color: #0080C0;"><b>Retry AI Extraction</b></a>)
+								</td>
+							</tr>
+							<?php
+						} else {
+							// Processing was initiated - check if jobId exists to start polling
+							if($jobId) {
+								// Job ID exists, start polling automatically
+								?>
+								<tr>
+									<td>&nbsp;</td>
+									<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
+										<span style="color:#0080C0;"><b>Property Details Extraction in Progress...</b></span> <img src="<?php echo SITE_URL;?>/images/loading.gif" border="0" style="vertical-align:middle;width:20px;">
+									</td>
+								</tr>
+								<script type="text/javascript">
+								// Auto-start polling when page loads if jobId exists
+								(function() {
+									var orderId = <?php echo $orderId; ?>;
+									var encodeOrderID = '<?php echo $encodeOrderID; ?>';
+									var mD5OrderID = '<?php echo $M_D_5_ORDERID; ?>';
+									var mD5ID = '<?php echo $M_D_5_ID; ?>';
+									var jobId = '<?php echo htmlspecialchars($jobId, ENT_QUOTES); ?>';
+									
+									// Wait for DOM to be ready
+									if(document.readyState === 'loading') {
+										document.addEventListener('DOMContentLoaded', function() {
+											setTimeout(function() {
+												if(typeof checkOCRFileStatus === 'function') {
+													checkOCRFileStatus(orderId, 'ocrStatusContainer_' + orderId, encodeOrderID, mD5OrderID, mD5ID, jobId);
+												}
+											}, 500);
+										});
+									} else {
+										setTimeout(function() {
+											if(typeof checkOCRFileStatus === 'function') {
+												checkOCRFileStatus(orderId, 'ocrStatusContainer_' + orderId, encodeOrderID, mD5OrderID, mD5ID, jobId);
+											}
+										}, 500);
+									}
+								})();
+								</script>
+								<?php
+							} else {
+								// No jobId - processing completed but file not found
+								?>
+								<tr>
+									<td>&nbsp;</td>
+									<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
+										<span style="color: #0080C0;">Processing completed but result file not found. </span>
+										(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>', null);" title="Retry AI Extraction" style="cursor:pointer;"><b>Retry AI Extraction</b></a>)
+									</td>
+								</tr>
+								<?php
+							}
+						}
+					} else {
+						// No status file - no processing attempted yet
+						?>
+						<tr>
+							<td>&nbsp;</td>
+							<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
+								(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>', null);" title="Get AI-Extracted Property Details" style="cursor:pointer;"><b>Get AI-Extracted Property Details</b></a>)
+							</td>
+						</tr>
+						<?php
+					}
+				}
 			} else { ?>
 				<tr>
 					<td>&nbsp;</td>

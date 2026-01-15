@@ -77,7 +77,14 @@
 			$filePath = $row['excatFileNameInServer'];
 			
 			// Remove /home/ieimpact from path if present
-			$filePath = str_replace("/home/ieimpact", "", $filePath);
+			if(function_exists('stringReplace'))
+			{
+				$filePath = stringReplace("/home/ieimpact", "", $filePath);
+			}
+			else
+			{
+				$filePath = str_replace("/home/ieimpact", "", $filePath);
+			}
 			
 			// Extract directory path (resultPath) from first file
 			if($firstFile)
@@ -124,38 +131,173 @@
 	$curlError = curl_error($ch);
 	curl_close($ch);
 	
-	// Return response
-	header('Content-Type: application/json');
+	// Prepare response data
+	$responseData = json_decode($response, true);
+	$isSuccess = false;
+	$responseMessage = '';
+	$jobId = null;
 	
 	if($curlError)
 	{
-		echo json_encode(array(
+		$isSuccess = false;
+		$responseMessage = 'API request failed: ' . $curlError;
+		$finalResponse = array(
 			'success' => false,
-			'message' => 'API request failed: ' . $curlError,
+			'message' => $responseMessage,
 			'request_data' => $apiData
-		));
+		);
 	}
 	else
 	{
-		$responseData = json_decode($response, true);
-		if($httpCode == 200)
+		// HTTP 200 and 201 are both success codes (201 = Created)
+		if($httpCode == 200 || $httpCode == 201)
 		{
-			echo json_encode(array(
-				'success' => true,
-				'message' => 'Files processed successfully',
+			// Extract jobId from response first
+			if($responseData && is_array($responseData))
+			{
+				// Try different possible keys for jobId
+				if(isset($responseData['jobId']))
+				{
+					$jobId = $responseData['jobId'];
+				}
+				elseif(isset($responseData['job_id']))
+				{
+					$jobId = $responseData['job_id'];
+				}
+				elseif(isset($responseData['data']['jobId']))
+				{
+					$jobId = $responseData['data']['jobId'];
+				}
+				elseif(isset($responseData['data']['job_id']))
+				{
+					$jobId = $responseData['data']['job_id'];
+				}
+			}
+			
+			// Check if response indicates success (even if HTTP code is 201)
+			$responseSuccess = isset($responseData['success']) ? $responseData['success'] : true;
+			$responseStatus = isset($responseData['status']) ? $responseData['status'] : null;
+			
+			// If we have a jobId, it means processing was initiated successfully
+			if($jobId || ($responseSuccess && ($responseStatus == 'pending' || $responseStatus == 'processing')))
+			{
+				$isSuccess = true;
+				$responseMessage = isset($responseData['message']) ? $responseData['message'] : 'Files processing initiated';
+			}
+			else
+			{
+				$isSuccess = $responseSuccess;
+				$responseMessage = isset($responseData['message']) ? $responseData['message'] : 'API request completed';
+			}
+			
+			$finalResponse = array(
+				'success' => $isSuccess,
+				'message' => $responseMessage,
 				'response' => $responseData,
-				'request_data' => $apiData
-			));
+				'request_data' => $apiData,
+				'jobId' => $jobId
+			);
 		}
 		else
 		{
-			echo json_encode(array(
-				'success' => false,
-				'message' => 'API returned error code: ' . $httpCode,
-				'response' => $responseData,
-				'request_data' => $apiData
-			));
+			// For other HTTP codes, still try to extract jobId in case it's in the response
+			if($responseData && is_array($responseData))
+			{
+				if(isset($responseData['jobId']))
+				{
+					$jobId = $responseData['jobId'];
+				}
+				elseif(isset($responseData['job_id']))
+				{
+					$jobId = $responseData['job_id'];
+				}
+				elseif(isset($responseData['data']['jobId']))
+				{
+					$jobId = $responseData['data']['jobId'];
+				}
+				elseif(isset($responseData['data']['job_id']))
+				{
+					$jobId = $responseData['data']['job_id'];
+				}
+			}
+			
+			// If we have jobId, treat as success (processing initiated)
+			if($jobId)
+			{
+				$isSuccess = true;
+				$responseMessage = isset($responseData['message']) ? $responseData['message'] : 'Files processing initiated';
+				$finalResponse = array(
+					'success' => true,
+					'message' => $responseMessage,
+					'response' => $responseData,
+					'request_data' => $apiData,
+					'jobId' => $jobId
+				);
+			}
+			else
+			{
+				$isSuccess = false;
+				$responseMessage = 'API returned error code: ' . $httpCode;
+				$finalResponse = array(
+					'success' => false,
+					'message' => $responseMessage,
+					'response' => $responseData,
+					'request_data' => $apiData
+				);
+			}
 		}
 	}
+	
+	// Save status to file in resultPath
+	if(!empty($resultPath))
+	{
+		$statusFile = $resultPath . '/ocr-processing-status.json';
+		
+		// If jobId is still null, try to extract it from response one more time
+		if(empty($jobId) && $responseData && is_array($responseData))
+		{
+			if(isset($responseData['jobId']))
+			{
+				$jobId = $responseData['jobId'];
+			}
+			elseif(isset($responseData['job_id']))
+			{
+				$jobId = $responseData['job_id'];
+			}
+			elseif(isset($responseData['data']['jobId']))
+			{
+				$jobId = $responseData['data']['jobId'];
+			}
+			elseif(isset($responseData['data']['job_id']))
+			{
+				$jobId = $responseData['data']['job_id'];
+			}
+		}
+		
+		$statusData = array(
+			'orderId' => $orderId,
+			'success' => $isSuccess,
+			'message' => $responseMessage,
+			'httpCode' => $httpCode,
+			'curlError' => $curlError ? $curlError : null,
+			'timestamp' => date('Y-m-d H:i:s'),
+			'response' => $responseData,
+			'rawResponse' => $response,
+			'jobId' => $jobId
+		);
+		
+		// Ensure directory exists
+		if(!is_dir($resultPath))
+		{
+			@mkdir($resultPath, 0755, true);
+		}
+		
+		// Write status file
+		@file_put_contents($statusFile, json_encode($statusData, JSON_PRETTY_PRINT));
+	}
+	
+	// Return response
+	header('Content-Type: application/json');
+	echo json_encode($finalResponse);
 	exit();
 ?>

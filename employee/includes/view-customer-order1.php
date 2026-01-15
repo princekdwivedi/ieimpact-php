@@ -858,7 +858,7 @@ function sendingNewGeneralMsg(memberId)
 	window.open(path,'',prop);
 }
 
-function getAIExtractedPropertyDetails(orderId, encodeOrderID, mD5OrderID, mD5ID)
+function getAIExtractedPropertyDetails(orderId, encodeOrderID, mD5OrderID, mD5ID, jobId)
 {
 	var containerId = 'ocrStatusContainer_' + orderId;
 	var container = document.getElementById(containerId);
@@ -876,16 +876,38 @@ function getAIExtractedPropertyDetails(orderId, encodeOrderID, mD5OrderID, mD5ID
 	var apiUrl = 'https://whizdev.ieimpact.com/employee/process-order-files-api.php?orderId=' + orderId;
 	var xhr = new XMLHttpRequest();
 	xhr.open('GET', apiUrl, true);
+	xhr.onreadystatechange = function() {
+		if(xhr.readyState == 4 && xhr.status == 200)
+		{
+			try
+			{
+				var response = JSON.parse(xhr.responseText);
+				// If response contains jobId, use it for polling
+				if(response.jobId)
+				{
+					jobId = response.jobId;
+				}
+			}
+			catch(e)
+			{
+				// Ignore errors, continue with existing jobId or null
+			}
+		}
+	};
 	xhr.send(); // Don't wait for response, just initiate the async process
 	
 	// Start polling immediately since API is asynchronous
 	// The file will be available when processing is complete
-	checkOCRFileStatus(orderId, containerId, encodeOrderID, mD5OrderID, mD5ID);
+	checkOCRFileStatus(orderId, containerId, encodeOrderID, mD5OrderID, mD5ID, jobId);
 }
 
-function checkOCRFileStatus(orderId, containerId, encodeOrderID, mD5OrderID, mD5ID)
+function checkOCRFileStatus(orderId, containerId, encodeOrderID, mD5OrderID, mD5ID, jobId)
 {
 	var checkUrl = '<?php echo SITE_URL_EMPLOYEES;?>/check-ocr-file-status.php?orderId=' + orderId;
+	if(jobId)
+	{
+		checkUrl += '&jobId=' + encodeURIComponent(jobId);
+	}
 	var container = document.getElementById(containerId);
 	var pollCount = 0;
 	var maxPolls = 120; // Maximum 120 polls (10 minutes if polling every 5 seconds)
@@ -901,6 +923,33 @@ function checkOCRFileStatus(orderId, containerId, encodeOrderID, mD5OrderID, mD5
 				try
 				{
 					var response = JSON.parse(xhr.responseText);
+					
+					// Check status from API response
+					if(response.statusData)
+					{
+						var status = response.statusData.status || (response.statusData.data && response.statusData.data.status);
+						var statusMessage = response.statusData.message || (response.statusData.data && response.statusData.data.message);
+						
+						if(status)
+						{
+							var statusLower = status.toLowerCase();
+							if(statusLower === 'processing' || statusLower === 'in_progress' || statusLower === 'pending')
+							{
+								// Still processing, show status
+								container.innerHTML = '(<span style="color:#0080C0;"><b>Processing: ' + (statusMessage || status) + '</b></span> <img src="<?php echo SITE_URL;?>/images/loading.gif" border="0" style="vertical-align:middle;width:20px;">)';
+								return; // Continue polling
+							}
+							else if(statusLower === 'failed' || statusLower === 'error' || statusLower === 'cancelled')
+							{
+								// Processing failed
+								clearInterval(pollInterval);
+								var errorMsg = statusMessage || 'Processing failed';
+								container.innerHTML = '(<span style="color:#ff0000;"><b>Error: ' + errorMsg + '</b></span> <a class="link_style13" onclick="getAIExtractedPropertyDetails(' + orderId + ', \'' + encodeOrderID + '\', \'' + mD5OrderID + '\', \'' + mD5ID + '\', null);" style="cursor:pointer; color: #0080C0;"><b>Retry</b></a>)';
+								return;
+							}
+						}
+					}
+					
 					if(response.exists)
 					{
 						// File exists, show the view link
