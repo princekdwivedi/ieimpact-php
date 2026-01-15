@@ -160,18 +160,6 @@
 				{
 					$jobId = $responseData['jobId'];
 				}
-				elseif(isset($responseData['job_id']))
-				{
-					$jobId = $responseData['job_id'];
-				}
-				elseif(isset($responseData['data']['jobId']))
-				{
-					$jobId = $responseData['data']['jobId'];
-				}
-				elseif(isset($responseData['data']['job_id']))
-				{
-					$jobId = $responseData['data']['job_id'];
-				}
 			}
 			
 			// Check if response indicates success (even if HTTP code is 201)
@@ -206,18 +194,6 @@
 				if(isset($responseData['jobId']))
 				{
 					$jobId = $responseData['jobId'];
-				}
-				elseif(isset($responseData['job_id']))
-				{
-					$jobId = $responseData['job_id'];
-				}
-				elseif(isset($responseData['data']['jobId']))
-				{
-					$jobId = $responseData['data']['jobId'];
-				}
-				elseif(isset($responseData['data']['job_id']))
-				{
-					$jobId = $responseData['data']['job_id'];
 				}
 			}
 			
@@ -259,18 +235,6 @@
 			if(isset($responseData['jobId']))
 			{
 				$jobId = $responseData['jobId'];
-			}
-			elseif(isset($responseData['job_id']))
-			{
-				$jobId = $responseData['job_id'];
-			}
-			elseif(isset($responseData['data']['jobId']))
-			{
-				$jobId = $responseData['data']['jobId'];
-			}
-			elseif(isset($responseData['data']['job_id']))
-			{
-				$jobId = $responseData['data']['job_id'];
 			}
 		}
 		
