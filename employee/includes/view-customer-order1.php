@@ -870,7 +870,7 @@ function getAIExtractedPropertyDetails(orderId, encodeOrderID, mD5OrderID, mD5ID
 	}
 	
 	// Show loading state
-	container.innerHTML = '(<span style="color:#0080C0;"><b>Property Details Extraction is in Progress...</b></span> <img src="<?php echo SITE_URL;?>/images/loading.gif" border="0" style="vertical-align:middle;">)';
+	container.innerHTML = '(<span style="color:#0080C0;"><b>Property Details Extraction in Progress...</b></span> <img src="<?php echo SITE_URL;?>/images/loading.gif" border="0" style="vertical-align:middle;width:20px;">)';
 	
 	// Call the API asynchronously (fire and forget)
 	var apiUrl = 'https://whizdev.ieimpact.com/employee/process-order-files-api.php?orderId=' + orderId;

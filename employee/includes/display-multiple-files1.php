@@ -362,45 +362,50 @@
 <?php
 	}
 
-	if($totalCustomerOrderFils > 1){
-																						
-		$messageFiledownLoadPath	=	SITE_URL_EMPLOYEES."/download-all-order-files.php?".$M_D_5_ORDERID."=".$encodeOrderID;
+if($totalCustomerOrderFils > 1){
+																					
+	$messageFiledownLoadPath	=	SITE_URL_EMPLOYEES."/download-all-order-files.php?".$M_D_5_ORDERID."=".$encodeOrderID;
 
-		$query		=	"SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0";
-		$result		=	mysqli_query($db_conn,$query);
-		if(mysqli_num_rows($result))
-		{
-			$row					=	mysqli_fetch_assoc($result);
-			$downloadPath			=	$row['excatFileNameInServer'];
-			$downloadPath           =   stringReplace("/home/ieimpact", "", $downloadPath);
+	$query		=	"SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0";
+	$result		=	mysqli_query($db_conn,$query);
+	if(mysqli_num_rows($result))
+	{
+		$row					=	mysqli_fetch_assoc($result);
+		$downloadPath			=	$row['excatFileNameInServer'];
+		$downloadPath           =   stringReplace("/home/ieimpact", "", $downloadPath);
 
-			$downloadFileName		=	"extracted-data.pdf";
-			$downloadPathInfo		=	pathinfo($downloadPath);
+		$downloadFileName		=	"extracted-data.pdf";
+		$downloadPathInfo		=	pathinfo($downloadPath);
+
+		// check if the order folder exists
+		if (is_dir($downloadPathInfo['dirname']) && file_exists($downloadPathInfo['dirname']) && file_exists($downloadPath)) {
 			$downloadPath           =   $downloadPathInfo['dirname'] . "/ocrFiles/$downloadFileName";
 			if(file_exists($downloadPath)) {
-?>
-		<tr>
-			<td>&nbsp;</td>
-			<td colspan="2" align="left">
-				(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo SITE_URL_EMPLOYEES."/download-multiple-file.php?".$M_D_5_ORDERID."=".$encodeOrderID."&".$M_D_5_ID."&FILE_TYPE=OCR_RESULT";?>');" title="View AI-Extracted Property Details" style="cursor:pointer;"><b>View AI-Extracted Property Details</b></a>)
-			</td>
-		</tr>
+				?>
+				<tr>
+					<td>&nbsp;</td>
+					<td colspan="2" align="left">
+						(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo SITE_URL_EMPLOYEES."/download-multiple-file.php?".$M_D_5_ORDERID."=".$encodeOrderID."&".$M_D_5_ID."&FILE_TYPE=OCR_RESULT";?>');" title="View AI-Extracted Property Details" style="cursor:pointer;"><b>View AI-Extracted Property Details</b></a>)
+					</td>
+				</tr>
 
-<?php
-			}
-			else
-			{
-?>
-		<tr>
-			<td>&nbsp;</td>
-			<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
-				(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>');" title="Get AI-Extracted Property Details" style="cursor:pointer;"><b>Get AI-Extracted Property Details</b></a>)
-			</td>
-		</tr>
-<?php
-			}
-		}
-?>
+				<?php } else { ?>
+				<tr>
+					<td>&nbsp;</td>
+					<td colspan="2" align="left" id="ocrStatusContainer_<?php echo $orderId;?>">
+						(<a class="link_style13" onclick="getAIExtractedPropertyDetails(<?php echo $orderId;?>, '<?php echo $encodeOrderID;?>', '<?php echo $M_D_5_ORDERID;?>', '<?php echo $M_D_5_ID;?>');" title="Get AI-Extracted Property Details" style="cursor:pointer;"><b>Get AI-Extracted Property Details</b></a>)
+					</td>
+				</tr>
+				<?php }
+			} else { ?>
+				<tr>
+					<td>&nbsp;</td>
+					<td colspan="2" align="left" style="color: red;">
+						Order file folder does not exist. AI extraction is not allowed.
+					</td>
+				</tr>
+			<?php }
+		} ?>
 
 		<!--<tr>
 			<td>&nbsp;</td>
@@ -408,7 +413,4 @@
 				(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo $messageFiledownLoadPath;?>');" title="Download All Files as ZIP" style="cursor:pointer;"><b>Download All Order Files As .zip</b></a>)
 			</td>
 		</tr>-->
-<?php
-		
-	}
-?>
+<?php } ?>

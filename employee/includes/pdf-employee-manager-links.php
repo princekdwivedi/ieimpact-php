@@ -250,6 +250,11 @@
 					<li><a href="<?php echo SITE_URL_EMPLOYEES;?>/daily-work-status.php">CURRENT ORDERS STATUS</a></li>
 					<li><a href="<?php echo SITE_URL_EMPLOYEES;?>/clientwise-employee-processed.php">MONTHLY ORDERS COMPLETED</a></li>
 					<?php
+						if($s_employeeId == 3 || $s_employeeId == 137 || $s_employeeId == 340){
+					?>
+					<li><a href="<?php echo SITE_URL_EMPLOYEES;?>/clientwise-order-placed-report.php">CLIENT MONTHLY ORDERS</a></li>
+					<?php
+						}
 						if($s_employeeId == 340 || $s_employeeId == 3 || $s_employeeId == 137 || $s_employeeId == 8){
 					?>
 						<li><a href="<?php echo SITE_URL_EMPLOYEES;?>/view-employee-monthly-sheet.php">MONTHLY PROCESSED ORDERS</a></li>

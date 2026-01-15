@@ -30,14 +30,45 @@
 
 	$downloadFileName			=  "";
 
-	if(isset($_GET[$M_D_5_ID]) && isset($_GET[$M_D_5_ORDERID]))
+	if(isset($_GET['FILE_TYPE']) && $_GET['FILE_TYPE'] === 'OCR_RESULT')
 	{
-		$encodeOrderID		=	$_GET[$M_D_5_ORDERID];
-		$encodeFileID		=	$_GET[$M_D_5_ID];
+		if(isset($_GET[$M_D_5_ORDERID]))
+		{
+			$encodeOrderID		=	$_GET[$M_D_5_ORDERID];
 
-		$orderId			=	base64_decode($encodeOrderID);
-		$fileId				=	base64_decode($encodeFileID);
-		if(empty($orderId) || empty($fileId))
+			$orderId			=	base64_decode($encodeOrderID);
+			if(empty($orderId))
+			{
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES);
+				exit();
+			}
+
+			$query		=	"SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0";
+			$result		=	mysqli_query($db_conn,$query);
+			if(mysqli_num_rows($result))
+			{
+				$row					=	mysqli_fetch_assoc($result);
+				$downloadPath			=	$row['excatFileNameInServer'];
+				$downloadPath           =   stringReplace("/home/ieimpact", "", $downloadPath);
+
+				$downloadFileName		=	"extracted-data.pdf";
+				$downloadPathInfo		=	pathinfo($downloadPath);
+				$downloadPath           =   $downloadPathInfo['dirname'] . "/ocrFiles/$downloadFileName";
+				$downloadFileName		=   "$orderId-AI-Extracted Property Details.pdf";
+
+				if(VISITOR_IP_ADDRESS	==	"122.160.167.153" || VISITOR_IP_ADDRESS	==	"45.12.221.2"){
+					echo "<br />".$downloadPath;
+				}
+			}
+			else
+			{
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES);
+				exit();
+			}
+		}
+		else
 		{
 			ob_clean();
 			header("Location: ".SITE_URL_EMPLOYEES);
@@ -46,38 +77,55 @@
 	}
 	else
 	{
-		ob_clean();
-		header("Location: ".SITE_URL_EMPLOYEES);
-		exit();
-	}
-	
-	
-	$query		=	"SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0 AND fileId=$fileId";
-	$result		=	mysqli_query($db_conn,$query);
-	if(mysqli_num_rows($result))
-	{
-		$row					=	mysqli_fetch_assoc($result);
-		$downloadPath			=	$row['excatFileNameInServer'];
-		if(VISITOR_IP_ADDRESS	==	"122.160.167.153"){
-			echo $downloadPath;
-		}
-		$downloadPath           =   stringReplace("/home/ieimpact", "", $downloadPath);
+		if(isset($_GET[$M_D_5_ID]) && isset($_GET[$M_D_5_ORDERID]))
+		{
+			$encodeOrderID		=	$_GET[$M_D_5_ORDERID];
+			$encodeFileID		=	$_GET[$M_D_5_ID];
 
-		if(VISITOR_IP_ADDRESS	==	"122.160.167.153"){
-			echo "<br />".$downloadPath;
+			$orderId			=	base64_decode($encodeOrderID);
+			$fileId				=	base64_decode($encodeFileID);
+			if(empty($orderId) || empty($fileId))
+			{
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES);
+				exit();
+			}
 		}
-		$uploadingFileType		=	$row['uploadingFileType'];
-		$uploadingFileExt		=	$row['uploadingFileExt'];
-		$uploadingFileName		=	$row['uploadingFileName'];
-		$mimeTypeField			=	$row['uploadingFileType'];
+		else
+		{
+			ob_clean();
+			header("Location: ".SITE_URL_EMPLOYEES);
+			exit();
+		}
+			
+		
+		$query		=	"SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0 AND fileId=$fileId";
+		$result		=	mysqli_query($db_conn,$query);
+		if(mysqli_num_rows($result))
+		{
+			$row					=	mysqli_fetch_assoc($result);
+			$downloadPath			=	$row['excatFileNameInServer'];
+			if(VISITOR_IP_ADDRESS	==	"122.160.167.153" || VISITOR_IP_ADDRESS	==	"45.12.221.2"){
+				echo $downloadPath;
+			}
+			$downloadPath           =   stringReplace("/home/ieimpact", "", $downloadPath);
 
-		$downloadFileName		=	$uploadingFileName.".".$uploadingFileExt;
-	}
-	else
-	{
-		ob_clean();
-		header("Location: ".SITE_URL_EMPLOYEES);
-		exit();
+			if(VISITOR_IP_ADDRESS	==	"122.160.167.153" || VISITOR_IP_ADDRESS	==	"45.12.221.2"){
+				echo "<br />".$downloadPath;
+			}
+			$uploadingFileType		=	$row['uploadingFileType'];
+			$uploadingFileExt		=	$row['uploadingFileExt'];
+			$uploadingFileName		=	$row['uploadingFileName'];
+			$mimeTypeField			=	$row['uploadingFileType'];
+
+			$downloadFileName		=	$uploadingFileName.".".$uploadingFileExt;
+		}
+		else
+		{
+			ob_clean();
+			header("Location: ".SITE_URL_EMPLOYEES);
+			exit();
+		}
 	}
 
 	if(file_exists($downloadPath))
@@ -130,6 +178,6 @@
 	else
 	{
 		//include(SITE_ROOT_EMPLOYEES   .   "/includes/file-not-found-page.php");
-		echo "KASE2";
+		echo "<b r/>KASE2 > " . $downloadFileName;
 	}
  ?>
