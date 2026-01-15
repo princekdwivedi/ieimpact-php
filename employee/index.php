@@ -1,0 +1,968 @@
+<?php
+	ob_start();
+	session_start();
+	ini_set('display_errors', 1);
+	error_reporting(E_ALL);
+	include("../root.php");
+	
+
+	// Include check-site-maintanence.php and session-vars.php
+	include(SITE_ROOT_EMPLOYEES . "/includes/check-site-maintanence.php");
+	
+	// Include session-vars.php - this sets up session variables
+	if(file_exists(SITE_ROOT_EMPLOYEES . "/includes/session-vars.php")) {
+		include(SITE_ROOT_EMPLOYEES . "/includes/session-vars.php");
+	}
+	
+	include(SITE_ROOT_EMPLOYEES .	"/classes/employee.php");
+	include(SITE_ROOT_EMPLOYEES .	"/includes/common-array.php");
+	include(SITE_ROOT			.	"/classes/validate-fields.php");
+	include(SITE_ROOT			.	"/classes/common.php");
+	include(SITE_ROOT			.   "/classes/email-templates.php");
+	include(SITE_ROOT_EMPLOYEES .	"/includes/trusted-device-functions.php"); // Trusted device functions
+	$emailObj					=	new emails();
+	$employeeObj				=	new employee();
+	$validator					=	new validate();
+
+	//pr($_COOKIE);
+
+	// Check session and redirect if logged in
+	if(isset($_SESSION['employeeId']) && !empty($_SESSION['employeeId']))
+	{
+		ob_clean();
+		header("Location: ".SITE_URL_EMPLOYEES ."/employee-details.php");
+		exit();
+	}
+	if(isset($_SESSION['mtemployeeId']) && !empty($_SESSION['mtemployeeId']))
+	{
+		ob_clean();
+		header("Location: ".SITE_URL_MTEMPLOYEES);
+		exit();
+	}
+
+	if(isset($_SESSION['SUCCESS_VERIFIED_PDF_EMPLOYEE_ID']))
+	{
+		unset($_SESSION['SUCCESS_VERIFIED_PDF_EMPLOYEE_ID']);
+	}
+
+	if(isset($_SESSION['FACEBOOK_LOGIN_PROCESSED_ON']))
+	{
+		unset($_SESSION['FACEBOOK_LOGIN_PROCESSED_ON']); 
+	}
+
+	$showLoginPage 				=	$employeeObj->getSingleQueryResult("SELECT setting FROM website_global_settings WHERE type='SHOW_EMPLOYEE_DISPLAY_LOGIN_PAGE'","setting");//1 means Show Old login for single to both PDF and MT and 2 means new show sarate login for both MT and PDF
+	if(empty($showLoginPage)){
+		$showLoginPage = 1; // Default to old login page
+	}
+
+	// Set document title for login page
+	if(!isset($docTitle)) {
+		$docTitle = "Employee Login - ieIMPACT";
+	}
+	
+	if($showLoginPage   == 2){
+		//////////////// SHOW LOGIN PAGE WITH SEPARATE LOGIN FOR PDF and MT Empoyees 
+	?>
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+		<title><?php echo $docTitle;?></title>
+		<link rel="shortcut icon" href="/new-favicon.ico" type="image/x-icon">
+	<style>
+		.login-choice-container {
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			padding: 20px;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+		}
+		.login-choice-wrapper {
+			width: 100%;
+			max-width: 800px;
+			background: #ffffff;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			padding: 50px 40px;
+			text-align: center;
+		}
+		.logo-container-choice {
+			margin-bottom: 30px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
+		.logo-choice {
+			max-width: 250px;
+			height: auto;
+			background: rgba(102, 126, 234, 0.1);
+			padding: 15px;
+			border-radius: 10px;
+		}
+		.login-choice-header h1 {
+			font-size: 32px;
+			color: #333;
+			margin-bottom: 10px;
+			font-weight: 600;
+		}
+		.login-choice-header p {
+			font-size: 16px;
+			color: #666;
+			margin-bottom: 40px;
+		}
+		.login-options {
+			display: flex;
+			justify-content: center;
+			gap: 40px;
+			flex-wrap: wrap;
+		}
+		.login-option {
+			flex: 1;
+			min-width: 250px;
+			max-width: 300px;
+			text-align: center;
+			padding: 30px 20px;
+			border-radius: 15px;
+			background: #f8f9fa;
+			transition: all 0.3s ease;
+			cursor: pointer;
+			text-decoration: none;
+			color: inherit;
+		}
+		.login-option:hover {
+			transform: translateY(-5px);
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+			background: #ffffff;
+		}
+		.login-option img {
+			max-width: 100%;
+			height: auto;
+			margin-bottom: 20px;
+			border-radius: 10px;
+		}
+		.login-option h3 {
+			font-size: 20px;
+			color: #667eea;
+			margin-bottom: 10px;
+			font-weight: 600;
+		}
+		.login-option p {
+			font-size: 14px;
+			color: #666;
+		}
+		@media (max-width: 768px) {
+			.login-choice-wrapper {
+				padding: 30px 20px;
+			}
+			.logo-choice {
+				max-width: 180px;
+				padding: 12px;
+			}
+			.login-choice-header h1 {
+				font-size: 24px;
+			}
+			.login-options {
+				flex-direction: column;
+				gap: 20px;
+			}
+			.login-option {
+				width: 100%;
+				max-width: 100%;
+			}
+		}
+	</style>
+	<div class="login-choice-container">
+		<div class="login-choice-wrapper">
+			<div class="logo-container-choice">
+				<img src="<?php echo SITE_URL;?>/images/logo-bg.gif" alt="ieIMPACT Logo" class="logo-choice" title="Innovation. Excellence. i.e. IMPACT">
+			</div>
+			<div class="login-choice-header">
+				<h1>Welcome To ieIMPACT Employee Section</h1>
+				<p>Please select your login area</p>
+			</div>
+			<div class="login-options">
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/mt-login.php" class="login-option" title="Click here to login MT Employee Area">
+					<img src="<?php echo SITE_URL;?>/images/mt-login.jpg" alt="MT Employee Login" style="max-width: 190px; height: auto;">
+					<h3>MT Employee Login</h3>
+					<p>Click here to access the MT Employee Area</p>
+				</a>
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/pdf-login.php" class="login-option" title="Click here to login PDF Employee Area">
+					<img src="<?php echo SITE_URL;?>/images/pdf-login.jpg" alt="PDF Employee Login" style="max-width: 190px; height: auto;">
+					<h3>PDF Employee Login</h3>
+					<p>Click here to access the PDF Employee Area</p>
+				</a>
+		</div>
+	</div>
+</div>
+<script type="text/javascript">
+// Add viewport meta tag for mobile responsiveness if not present
+if (!document.querySelector('meta[name="viewport"]')) {
+	var viewport = document.createElement('meta');
+	viewport.name = 'viewport';
+	viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
+	document.getElementsByTagName('head')[0].appendChild(viewport);
+}
+</script>
+</body>
+</html>
+<?php	
+		exit(); // Exit after showing login choice page
+	}
+	else{
+		//////////////// SHOW COMMON LOGIN FOR PDF and MT Empoyees
+		// Start HTML structure for login page
+		?>
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+			<title><?php echo isset($docTitle) ? $docTitle : "Employee Login - ieIMPACT";?></title>
+			<link rel="shortcut icon" href="/new-favicon.ico" type="image/x-icon">
+		</head>
+		<body style="margin: 0; padding: 0;">
+		<?php
+		/////////////////////// FUNCTION TO GET GOOGLE RE-CAPTCHA CURL DATA ///////////////////
+		function getCurlData($url)
+		{
+			$curl = curl_init();
+			curl_setopt($curl, CURLOPT_URL, $url);
+			curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+			curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+			curl_setopt($curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.16) Gecko/20110319 Firefox/3.6.16");
+			$curlData = curl_exec($curl);
+			curl_close($curl);
+			return $curlData;
+		}
+
+		
+
+		$form						=	SITE_ROOT_EMPLOYEES.    "/forms/new-login-otp.php";
+		$commonClass				=	new common();
+
+		$a_managerEmails			=	array();
+		if(method_exists($commonClass, 'getMangersEmails')){
+			$a_managerEmails = $commonClass->getMangersEmails();
+		}
+		$checkingFailCaptcha		=	"e11185b6e35c1b767174dc988aa0f179";
+		$checkingFailCaptchaCode	=	"70b29c4920daf4e51e8175179027e668";
+
+		if(!isset($s_visitingFromMobileComputer) || $s_visitingFromMobileComputer	!=	"computer")
+		{
+			$deviceType				=	"Mobile";
+		}
+		else
+		{
+			$deviceType				=	"Computer";
+		}
+
+		if(defined('VISITOR_BROWSER_TYPE') && VISITOR_BROWSER_TYPE		==   "IE Browser")
+		{
+			$userBowser				=	 "ie Browser";
+		}
+		else
+		{
+			$userBowser				=    getUsersBrowserTypes();
+		}
+
+		$userOs						=    getUserOperatingSystem();
+
+
+		$loginId					=	"";
+		$employeeSecurityCode		=	EMPLOYEE_SPECIAL_SECURITY_CODE;
+		$password					=	"";
+		$errorMsg					=	"";
+		$loginError					=	"";
+		
+		$urlRef						=	SITE_URL_EMPLOYEES."/employee-details.php";
+		$domain						=	defined('REMEMBER_PASSWORD_ON_SITE') ? REMEMBER_PASSWORD_ON_SITE : '';
+		$rememberEmployeePass		=	"";
+		$rememberEmail				=	"";
+		$rememberSecurityToken		=	"";
+		$rememberID					=	"";
+		$pwdChecked					=	"";
+		$securityToken				=	"";
+
+		$plusNumber1				=	rand(1,9);
+		$plusNumber2				=	rand(1,9);
+		$numberSum					=	$plusNumber1+$plusNumber2;
+		$calSum						=	"";
+		$employeeLoginFromIP		=	VISITOR_IP_ADDRESS;
+		$employeeLoginFromIPUptoTwo	=	VISITOR_IP_ADDRESS;//getFirstTwoIpDigits($employeeLoginFromIP); This code was modfied on 8th May,2022 and added full IP chek in instead of first two digits  
+		
+
+		$showCaptcha				=	"0";	
+		
+		$isPdfEmployee				=	0;
+		$failLoginPassword			=	"";
+		$s_failLoginEmailPassword	=	0;
+		
+		// OTP verification variables for login
+		$isLoginOtpRequired			=	0;
+		$loginOtpCode				=	"";
+		$pendingLoginData			=	array(); // Store login credentials temporarily for OTP verification
+
+		$a_officeIPAddress			=	array();
+		$a_officeIPAddressUptoTwo	=	array();
+		
+		$isRequiredOtp				=	0;
+		$otpCode					=	"";
+		if(isset($_SESSION['isNeededOtp'])){
+			$isRequiredOtp			=	1;
+		}
+		
+		// Check if OTP is required for login (after successful email/password/security token validation)
+		if(isset($_SESSION['isLoginOtpRequired'])){
+			$isLoginOtpRequired		=	1;
+			if(isset($_SESSION['pendingLoginData'])){
+				$pendingLoginData	=	$_SESSION['pendingLoginData'];
+				// Restore login credentials from session for OTP verification
+				if(isset($pendingLoginData['loginEmail'])){
+					$rememberEmail = $pendingLoginData['loginEmail'];
+				}
+				if(isset($pendingLoginData['password'])){
+					$rememberEmployeePass = $pendingLoginData['password'];
+				}
+				if(isset($pendingLoginData['loginId'])){
+					$loginId = $pendingLoginData['loginId'];
+				}
+			}
+		}
+
+		$query								=	"SELECT * FROM office_ip_addresses_list WHERE isActive='yes'";
+		$result								=	dbQuery($query);
+		if(mysqli_num_rows($result))
+		{
+			while($row						=	mysqli_fetch_assoc($result)){
+				$ipAddress					=	stripslashes($row['ipAddress']);
+				$isActive					=	stripslashes($row['isActive']);
+
+				$a_officeIPAddress[]		=	$ipAddress;
+				$a_officeIPAddressUptoTwo[]	=	$ipAddress;//getFirstTwoIpDigits($ipAddress); This code was modfied on 8th May,2022 and added full IP chek in instead of first two digits 
+			}
+		}		
+
+		if(isset($_GET[$checkingFailCaptcha]))
+		{
+			$getsecure				=	$_GET[$checkingFailCaptcha];
+			if($getsecure			==	$checkingFailCaptchaCode)
+			{
+				$showCaptcha		=	1;
+			}
+			else
+			{
+				$showCaptcha		=	1;
+			}
+		}
+
+
+		if(isset($_COOKIE['rememberEmployeePass']))
+		{
+			$rememberEmployeePass=	$_COOKIE['rememberEmployeePass'];
+			$rememberEmployeePass=	base64_decode($rememberEmployeePass);
+			$pwdChecked			 =	"checked";
+		}
+		
+		if(isset($_COOKIE['rememberEmail']))
+		{
+			$rememberEmail		        =	$_COOKIE['rememberEmail'];
+		}
+		if(isset($_COOKIE['rememberSecurityToken']))
+		{
+			$rememberSecurityToken		=	$_COOKIE['rememberSecurityToken'];
+		}
+
+		if(isset($_COOKIE['rememberID']))
+		{
+			$rememberID					=	$_COOKIE['rememberID'];
+		}
+
+
+
+		if(isset($_GET['urlRef']))
+		{
+			$urlRef	=	$_GET['urlRef'];
+		}
+		if(isset($_GET['error']))
+		{
+			$error		=	$_GET['error'];
+			if($error	==	1)
+			{
+				$loginError	=	"Login ID or Password or Security Token.";
+			}
+			elseif($error	==	2)
+			{
+				$loginError	=	"Login ID or Password or Security Token.";
+			}
+			elseif($error	==	3)
+			{
+				$loginError	=	"Your account has some problem.<br /> Please contact support@ieimpact.com.<br /> Please mention error code X1234.";
+			}
+			elseif($error	==	5)
+			{
+				$loginError	=	"Please try to login with using RDP server.<br /> Please contact support@ieimpact.com.<br /> Please mention error code X2345.";
+			}
+			elseif($error	==	6)
+			{
+				$loginError	=	"We are sending an O.T.P in your registered mobile and email";
+			}
+			elseif($error	==	7)
+			{
+				$loginError	=	"Due to long inactivity, your account is deactivated. Please contact your manager or HR.";
+			}
+		}
+		// Initialize result variable
+		$result = false;
+		
+		if(isset($_REQUEST['formsubmitted']))
+		{
+			extract($_REQUEST);
+			$start_time_stamp   =    time();
+
+			// Initialize variables
+			$loginEmail			=	isset($loginEmail) ? trim($loginEmail) : "";
+			$password			=	isset($password) ? trim($password) : "";
+			$securityToken		=	isset($securityToken) ? trim($securityToken) : "";
+			$loginOtpCode		=	isset($loginOtpCode) ? trim($loginOtpCode) : "";
+			$isLoginOtpRequired	=	isset($_SESSION['isLoginOtpRequired']) ? $_SESSION['isLoginOtpRequired'] : 0;
+			
+			// Initialize IP-related variables
+			$employeeLoginIpCountry		=	"";
+			$employeeLoginIpRegion		=	"";
+			$employeeLoginIpCity		=	"";
+			$employeeLoginIpISP			=	"";
+
+			$securityToken		=	makeDBSafe($securityToken);
+			$loginEmail			=	makeDBSafe($loginEmail);
+			$password			=	makeDBSafe($password);
+			$loginOtpCode		=	makeDBSafe($loginOtpCode);
+
+			$failLoginPassword	=   $password;
+
+			$rememberPass		=	base64_encode($password);
+
+			if(isset($_POST['rememberCheckPass']))
+			{
+				setcookie('rememberEmail',$loginEmail, time()+60*60*24*15, '/', $domain);
+				setcookie('rememberEmployeePass',$rememberPass, time()+60*60*24*15, '/', $domain);
+				setcookie('rememberSecurityToken',$securityToken, time()+60*60*24*15, '/', $domain);
+			}
+			else
+			{
+				setcookie('rememberEmail','',false,'/',$domain);
+				setcookie('rememberEmployeePass','',false,'/',$domain);
+				setcookie('rememberSecurityToken','',false,'/',$domain);
+			}
+			$loginId		=	0;
+
+			if($user_ip_data				=	getIPDetailsWithAlternateFunctions(VISITOR_IP_ADDRESS))
+			{	
+				$employeeLoginIpCountryCode =	$user_ip_data['country_code'];
+				$employeeLoginIpCountry		=	$user_ip_data['country'];
+				if(empty($employeeLoginIpCountry)){
+					if($employeeLoginIpCountryCode == "IN"  || $employeeLoginIpCountryCode == "IN"){
+						$employeeLoginIpCountry =   "India";
+					}
+				}
+				$employeeLoginIpRegion		=	$user_ip_data['region'];
+				$employeeLoginIpCity		=	$user_ip_data['city'];
+				$employeeLoginIpZipCode		=	$user_ip_data['zipcode'];
+				$employeeLoginIpLatitude	=	$user_ip_data['latitude'];
+				$employeeLoginIpLongitude	=	$user_ip_data['longitude'];
+				$employeeLoginIpISP			=	$user_ip_data['ipisp'];
+				$loginIpCountry			    =	$employeeLoginIpCountry;
+
+			}
+			else{
+				$employeeLoginIpCountry		=	"";
+				$employeeLoginIpRegion		=	"";
+				$employeeLoginIpCity		=	"";
+				$employeeLoginIpZipCode		=	"";
+				$employeeLoginIpLatitude	=	"";
+				$employeeLoginIpLongitude	=	"";
+				$employeeLoginIpISP			=	"";
+				$loginIpCountry			    =	"";
+			}
+			if($isLoginOtpRequired == 0){
+		
+				$validator->checkField($loginEmail, '', 'Please enter your email.');
+				if(!empty($loginEmail))
+				{
+					$emailDomain 	   = getEmailDomain($loginEmail);
+					$disposableEmails  = blockEmailAddress();
+					if(!filter_var($loginEmail, FILTER_VALIDATE_EMAIL))
+					{
+						$validator->setError("Enter a valid email.");
+					}
+					elseif(!empty($emailDomain) && in_array($emailDomain,$disposableEmails)){
+		                $validator->setError("The email address is invalid. Please check.");
+		            }
+				}
+				$validator->checkField($password,"","Enter your password.");
+				$validator->checkField($securityToken, '', 'Please enter security token.');
+			}
+
+			$displayCaptchaError	=	0;
+			
+			// Initialize variables
+			$employeeType = 0;
+			$employeeOwnSecurityCode = "";
+			$securityTokenUpdatedDateTime = "";
+			$lastLoginDateTime = "";
+			$fullName = "";
+			$employeeEmail = "";
+			$isAllowingOutsideLogin = 0;
+			$isForcedToDeactivateAccount = 0;
+			$lastPasswordChangedOn = "";
+			$currentDateTime = CURRENT_DATE_INDIA." ".CURRENT_TIME_INDIA;
+			$loginIpCountry = "";
+			
+			if(!empty($loginEmail))
+			{
+				$query				=	"SELECT employeeId,email,fullName,mobile,hasPdfAccess,isActive,securityCode,passwordChangeOn,securityCodeChangeOn,securityCodeChangeTime,lastLoginDate,lastLoginTime FROM employee_details WHERE email='$loginEmail' AND isActive=1";
+				$result				=	dbQuery($query);
+				if(mysqli_num_rows($result)){
+					$row			=	mysqli_fetch_assoc($result);
+					$fullName		=	$row['fullName'];
+					$employeeEmail	=	$row['email'];
+					$employeePhone	=	$row['mobile'];
+					$loginId	    =	$row['employeeId'];
+					$employeeType	=	$row['hasPdfAccess'];
+				    $employeeOwnSecurityCode 	=	$row['securityCode'];
+				    $lastPasswordChangedOn      =	$row['passwordChangeOn'];
+				    $securityCodeChangeOn       =	$row['securityCodeChangeOn'];
+				    $securityCodeChangeTime     =	$row['securityCodeChangeTime'];
+				    $lastLoginDate              =	$row['lastLoginDate'];
+				    $lastLoginTime              =	$row['lastLoginTime'];
+					
+				    $isForcedToDeactivateAccount=   0;
+				    if(!empty($lastLoginDate) && $lastLoginDate != "0000-00-00"){
+				    	$currentDate 			=	CURRENT_DATE_INDIA;
+				    	if($currentDate > $lastLoginDate && $employeeType == 1){
+				    		$dateDifference     =   strtotime($currentDate) - strtotime($lastLoginDate);
+				    		$differentDays 		=	round($dateDifference / 86400);
+				    		if($differentDays  >= 15){
+				    			$isForcedToDeactivateAccount=   1;
+				    		}
+				    	}
+				    }
+
+
+				    $securityTokenUpdatedDateTime = $securityCodeChangeOn." ".$securityCodeChangeTime;
+				    $lastLoginDateTime            = $lastLoginDate." ".$lastLoginTime;
+
+					if(empty($employeePhone)){
+						$employeePhone	=	"";
+					}
+				}
+				else{
+					$loginId	=	$employeeObj->getSingleQueryResult("SELECT employeeId FROM employee_details WHERE email='$loginEmail'","employeeId");
+				}
+
+				if(empty($loginId))
+				{
+					$loginId=	0;
+					$validator->setError("This email doesnot exist.");
+				}
+			}
+
+			// Simplified Security token validation
+			$securityTokenValid = false;
+			if(!empty($securityToken) && !empty($loginId) && $loginId > 0 && $displayCaptchaError == 0)
+			{
+				// Only validate if we have employee data
+				if(!empty($employeeOwnSecurityCode) || !empty($employeeSecurityCode))
+				{
+					// Determine correct security code based on employee type
+					$expectedSecurityCode = ($employeeType == 1 && !empty($employeeOwnSecurityCode)) ? $employeeOwnSecurityCode : $employeeSecurityCode;
+					
+					if($securityToken == $expectedSecurityCode)
+					{
+						$securityTokenValid = true;
+					}
+					else
+					{
+						// Security token mismatch
+						if(!empty($securityTokenUpdatedDateTime) && !empty($lastLoginDateTime) && $securityTokenUpdatedDateTime > $lastLoginDateTime){
+							$validator->setError("Your security token has been updated. Please click 'How To Get It' to receive your security token via email.");
+						}
+						else{
+							$validator->setError("Incorrect security token. Please check and try again.");
+						}
+					}
+				}
+			}
+			$dataValid	 =	$validator ->isDataValid();
+			
+			// Ensure isLoginOtpRequired is set from session if not already set
+			if(!isset($isLoginOtpRequired) || empty($isLoginOtpRequired)){
+				$isLoginOtpRequired = isset($_SESSION['isLoginOtpRequired']) ? $_SESSION['isLoginOtpRequired'] : 0;
+			}
+			
+			if($dataValid)
+			{			
+				// Check if login OTP is required (after successful email/password/security token validation)
+
+				if($isLoginOtpRequired == 1){
+					// Verify login OTP
+					if(empty($loginOtpCode)){
+						$validator->setError("Please enter the OTP sent to your email.");
+						$errorMsg = $validator->getErrors();
+						include($form);
+						exit();
+					}
+					
+					// Get stored OTP from session
+					$storedOtpCode = isset($_SESSION['loginOtpCode']) ? $_SESSION['loginOtpCode'] : "";
+					$otpExpireTime = isset($_SESSION['loginOtpExpireTime']) ? $_SESSION['loginOtpExpireTime'] : "";
+					
+					if(empty($storedOtpCode) || empty($otpExpireTime)){
+						
+						$validator->setError("OTP session expired. Please login again.");
+						unset($_SESSION['isLoginOtpRequired']);
+						unset($_SESSION['pendingLoginData']);
+						unset($_SESSION['loginOtpCode']);
+						unset($_SESSION['loginOtpExpireTime']);
+						$errorMsg = $validator->getErrors();
+						include($form);
+						exit();
+					}
+					elseif($currentDateTime >= $otpExpireTime){
+					
+						$validator->setError("The OTP has expired. Please login again.");
+						unset($_SESSION['isLoginOtpRequired']);
+						unset($_SESSION['pendingLoginData']);
+						unset($_SESSION['loginOtpCode']);
+						unset($_SESSION['loginOtpExpireTime']);
+						$errorMsg = $validator->getErrors();
+						include($form);
+						exit();
+					}
+					elseif($loginOtpCode != $storedOtpCode){
+						
+						$validator->setError("Invalid OTP. Please check and try again.");
+						$errorMsg = $validator->getErrors();
+						include($form);
+						exit();
+					}
+					else{
+						
+						// OTP verified successfully, use stored login credentials
+						$pendingLoginData = isset($_SESSION['pendingLoginData']) ? $_SESSION['pendingLoginData'] : array();
+						$loginEmail = isset($pendingLoginData['loginEmail']) ? $pendingLoginData['loginEmail'] : "";
+						$password = isset($pendingLoginData['password']) ? $pendingLoginData['password'] : "";
+						$loginId = isset($pendingLoginData['loginId']) ? $pendingLoginData['loginId'] : 0;
+						$loginIpCountry = isset($pendingLoginData['loginIpCountry']) ? $pendingLoginData['loginIpCountry'] : "";
+						
+						// Clear OTP session
+						unset($_SESSION['isLoginOtpRequired']);
+						unset($_SESSION['pendingLoginData']);
+						unset($_SESSION['loginOtpCode']);
+						unset($_SESSION['loginOtpExpireTime']);
+						
+						// REGISTER DEVICE AS TRUSTED AFTER SUCCESSFUL OTP VERIFICATION
+						$deviceToken = getTrustedDeviceCookie();
+						if (empty($deviceToken)) {
+							// Generate new device token
+							$deviceToken = generateDeviceToken();
+						}
+						// Get browser information
+						$browserInfo = isset($_SERVER['HTTP_USER_AGENT']) ? substr($_SERVER['HTTP_USER_AGENT'], 0, 100) : '';
+						// Register device as trusted
+						$domain = defined('REMEMBER_PASSWORD_ON_SITE') ? REMEMBER_PASSWORD_ON_SITE : '';
+						registerTrustedDevice($loginId, $deviceToken, $browserInfo);
+						setTrustedDeviceCookie($deviceToken, $domain);
+						
+						// Proceed with login
+						$result = $employeeObj->employeeLoginWithNewPassword($loginId,$password,$loginEmail,$loginIpCountry);
+
+
+						ob_clean();
+						header("Location: ".SITE_URL_EMPLOYEES ."/employee-details.php");
+						exit();
+					}
+				}
+				else{
+					// After email, password, and security token are verified, check trusted device
+					if($securityTokenValid && !empty($loginId) && $loginId > 0 && !empty($loginEmail) && !empty($password))
+					{
+
+						// Verify password by attempting login (without creating session)
+						$passwordCheckResult = $employeeObj->checkEmployeeLogin($loginId,$password,$loginEmail);
+						
+						
+						// If password is correct (login successful), check for trusted device
+						if($passwordCheckResult && is_numeric($passwordCheckResult)){
+							
+							// CHECK FOR TRUSTED DEVICE - Skip OTP if device is trusted
+							$deviceToken = getTrustedDeviceCookie();
+							$isDeviceTrusted = false;
+							
+							if (!empty($deviceToken)) {
+								$isDeviceTrusted = isTrustedDevice($loginId, $deviceToken);
+							}
+							
+							if ($isDeviceTrusted) {
+								// TRUSTED DEVICE FOUND - SKIP OTP AND LOGIN DIRECTLY
+								// Refresh cookie expiry
+								$domain = defined('REMEMBER_PASSWORD_ON_SITE') ? REMEMBER_PASSWORD_ON_SITE : '';
+								setTrustedDeviceCookie($deviceToken, $domain);
+								
+								// Proceed with login (bypass OTP) - set result to trigger login processing
+								$result = $employeeObj->employeeLoginWithNewPassword($loginId, $password, $loginEmail, $loginIpCountry);
+								
+								// Login successful - continue to process result below
+								// The code will continue to line ~794 "Continue with login result processing"
+							} else {
+								// NO TRUSTED DEVICE - SEND OTP AS USUAL
+								// Clear any existing session data
+								$sessionKeys = array('employeeId', 'employeeName', 'employeeEmail', 'hasPdfAccess', 'hasManagerAccess', 
+									'departmentId', 'employeeLoginSessionTrackId', 'isNightShiftEmployee', 'iasHavingAllQaAccess', 'isHavingVerifyAccess');
+								foreach($sessionKeys as $key){
+									if(isset($_SESSION[$key])){
+										unset($_SESSION[$key]);
+									}
+								}
+								
+								// Generate OTP
+								$validTillNext = getPlusCalculatedMinitue(CURRENT_DATE_INDIA,CURRENT_TIME_INDIA,5);
+								list($date,$time) = explode("=",$validTillNext);
+								$otpExpireTime = $date." ".$time;
+								$generatedOtpCode = rand(1111,9999);
+								
+								// Store OTP in session
+								$_SESSION['isLoginOtpRequired'] = 1;
+								$_SESSION['loginOtpCode'] = $generatedOtpCode;
+								$_SESSION['loginOtpExpireTime'] = $otpExpireTime;
+								$_SESSION['pendingLoginData'] = array(
+									'loginEmail' => $loginEmail,
+									'password' => $password,
+									'securityToken' => $securityToken,
+									'loginId' => $loginId,
+									'loginIpCountry' => $loginIpCountry
+								);
+								
+								// Send OTP via email
+								$fullName = isset($fullName) ? $fullName : "";
+								$employeeEmail = isset($employeeEmail) ? $employeeEmail : $loginEmail;
+								
+								include(SITE_ROOT."/includes/send-mail.php");
+								$from = "hr@ieimpact.com";
+								$fromName = "HR ieIMPACT";
+								$mailSubject = "OTP confirmation alert for your ieIMPACT login";
+								$templateId = ADMINISTRATOR_SENDING_EMAIL_EMPLOYEES;
+								$smsMessage = "You have accessed ieIMPACT employee login for which One Time Password (OTP) has been generated and sent on your registered email on ".showDate(CURRENT_DATE_INDIA)." at ".CURRENT_TIME_INDIA." and valid for next 5 minutes. The OTP is - <b><u>".$generatedOtpCode."</u></b><br /><br />In case you have not logged in to your ieIMPACT employee account, please call HR department";
+								
+								$a_templateData = array("{employeeName}"=>$fullName,"{message}"=>$smsMessage);
+								@sendTemplateMail($from, $fromName, $employeeEmail, $mailSubject, $templateId, $a_templateData);
+								
+								// Redirect to show OTP input
+								ob_clean();
+								header("Location: ".SITE_URL_EMPLOYEES);
+								exit();
+							}
+						}
+						else{
+							// Password incorrect
+							$validator->setError("Incorrect password. Please check and try again.");
+							$errorMsg	 =	$validator ->getErrors();
+							include($form);
+							exit();
+						}
+					}
+					else{
+						
+						// Security token not validated or missing data - show form with errors
+						if(!$securityTokenValid && !empty($loginId) && $loginId > 0){
+							// Security token was invalid, errors already set, just show form
+							include($form);
+							exit();
+						}
+						// If no loginId or other issues, show form with errors
+						if(empty($loginId) || $loginId == 0){
+							// No valid login ID, show form with validation errors
+							include($form);
+							exit();
+						}
+						// Missing required data, show form
+						include($form);
+						exit();
+					}
+				}
+				
+				// Continue with login result processing (outside OTP check)
+				if(isset($result) && $result)
+				{
+					if(!empty($isForcedToDeactivateAccount)){
+						$exactOriginalEmail			=	$employeeEmail;
+						$email						=	$employeeEmail.".OLD";
+						$deactivatedDate			=	CURRENT_DATE_INDIA;
+
+						//////////////////////////// FORCED TO DEACTIVATE ACCOUNT ////////
+						dbQuery("UPDATE employee_details SET isActive=0,email='$email',exactOriginalEmail='$exactOriginalEmail',deactivatedDate='".CURRENT_DATE_INDIA."' WHERE employeeId=$loginId");
+
+						if(isset($_SESSION['employeeId'])){
+							unset($_SESSION['employeeId']);
+						}
+						if(isset($_SESSION['employeeName'])){
+							unset($_SESSION['employeeName']);
+						}
+						if(isset($_SESSION['employeeEmail'])){
+							unset($_SESSION['employeeEmail']);
+						}
+						if(isset($_SESSION['isNightShiftEmployee'])){
+							unset($_SESSION['isNightShiftEmployee']);
+						}
+						if(isset($_SESSION['hasManagerAccess'])){
+							unset($_SESSION['hasManagerAccess']);
+						}
+						if(isset($_SESSION['hasPdfAccess'])){
+							unset($_SESSION['hasPdfAccess']);
+						}
+						if(isset($_SESSION['iasHavingAllQaAccess'])){
+							unset($_SESSION['iasHavingAllQaAccess']);
+						}
+						if(isset($_SESSION['isHavingVerifyAccess'])){
+							unset($_SESSION['isHavingVerifyAccess']);
+						}
+						if(isset($_SESSION['departmentId'])){
+							unset($_SESSION['departmentId']);
+						}
+
+						ob_clean();
+						header("Location: ".SITE_URL_EMPLOYEES."/index.php?error=7");
+						exit();
+					}
+
+					if(is_numeric($result))
+					{
+						if(isset($_SESSION['isNeededOtp'])){
+							dbQuery("UPDATE employee_details SET isOtpRequired=0,otpCode='',codeExpireOn='0000-00-00 00:00:00' WHERE employeeId=$loginId");
+							unset($_SESSION['isNeededOtp']);
+						}
+
+						$end_time_stamp         =    time();
+						$time_taken             =    $end_time_stamp-$start_time_stamp;
+
+						dbQuery("INSERT INTO employee_login_track SET employeeId=$loginId,loginDate='".CURRENT_DATE_INDIA."',loginTime='".CURRENT_TIME_INDIA."',loginIP='$employeeLoginFromIP',start_time_stamp='$start_time_stamp',end_time_stamp='$end_time_stamp',time_taken='$time_taken'");
+
+						dbQuery("UPDATE employee_details SET lastLoginDate='".CURRENT_DATE_INDIA."',lastLoginTime='".CURRENT_TIME_INDIA."' WHERE employeeId=$loginId");
+
+						global $db_conn;
+						$employeeLoginSessionTrackId			   = mysqli_insert_id($db_conn);
+
+						$_SESSION['employeeLoginSessionTrackId']   =	$employeeLoginSessionTrackId;
+
+						if(isset($_SESSION['hasPdfAccess']) && $_SESSION['hasPdfAccess'] == 1)
+						{
+							if(!in_array($employeeLoginFromIPUptoTwo,$a_officeIPAddressUptoTwo))
+							{
+								include(SITE_ROOT_EMPLOYEES."/includes/track-outside-office-login.php");
+							}
+						}
+
+						if($lastPasswordChangedOn	==	"0000-00-00")
+						{
+							$_SESSION['forceResetPassword']	=	1;
+
+							if(isset($_SESSION['hasPdfAccess']) && $_SESSION['hasPdfAccess'] == 1)
+							{
+								ob_clean();
+								header("Location: ".SITE_URL_EMPLOYEES."/change-password.php");
+								exit();
+							}
+							else{
+								ob_clean();
+								header("Location: ".SITE_URL_MTEMPLOYEES."/change-password.php");
+								exit();
+							}
+						}
+						elseif($lastPasswordChangedOn	!=	"0000-00-00")
+						{
+							$fixedSixtyDaysOldDate		=	getPreviousGivenDate(CURRENT_DATE_INDIA,60);
+							if($fixedSixtyDaysOldDate   >   $lastPasswordChangedOn)
+							{
+								$_SESSION['forceResetPassword']	=	1;
+								
+								if(isset($_SESSION['hasPdfAccess']) && $_SESSION['hasPdfAccess'] == 1)
+								{
+									ob_clean();
+									header("Location: ".SITE_URL_EMPLOYEES."/change-password.php");
+									exit();
+								}
+								else{
+									ob_clean();
+									header("Location: ".SITE_URL_MTEMPLOYEES."/change-password.php");
+									exit();
+								}
+							}
+							else
+							{
+								if(isset($_SESSION['departmentId']) && $_SESSION['departmentId'] == 1)
+								{
+									ob_clean();
+									header("Location: ".SITE_URL_MTEMPLOYEES);
+									exit();
+								}
+								else
+								{
+									ob_clean();
+									header("Location: ".SITE_URL_EMPLOYEES."/employee-details.php");
+									exit();
+								}
+							}
+						}
+					}
+					else
+					{
+						// Simplified error handling - just show error message
+						if($result == "iperror")
+						{
+							$validator->setError("Login is not allowed from outside India.");
+						}
+						elseif($result == "errorFailLogin")
+						{
+							$validator->setError("Your account is locked. Please contact support.");
+						}
+						else
+						{
+							$validator->setError("Your account is not yet activated. Please contact administrator.");
+						}
+						$errorMsg = $validator->getErrors();
+					}
+				}
+				else
+				{
+					// Login failed - show simple error
+					$validator->setError("Incorrect email, password, or security token. Please check and try again.");
+					$errorMsg = $validator->getErrors();
+				}
+			}
+			else
+			{
+				// Ensure isLoginOtpRequired is set from session before including form
+				if(!isset($isLoginOtpRequired)){
+					$isLoginOtpRequired = isset($_SESSION['isLoginOtpRequired']) ? $_SESSION['isLoginOtpRequired'] : 0;
+				}
+				
+			}
+		}
+	     // Ensure isLoginOtpRequired is set from session before including form
+		if(!isset($isLoginOtpRequired)){
+			$isLoginOtpRequired = isset($_SESSION['isLoginOtpRequired']) ? $_SESSION['isLoginOtpRequired'] : 0;
+		}
+		$errorMsg	 =	$validator ->getErrors();
+		// Page load without form submission - ensure isLoginOtpRequired is set from session
+		if(!isset($isLoginOtpRequired)){
+			$isLoginOtpRequired = isset($_SESSION['isLoginOtpRequired']) ? $_SESSION['isLoginOtpRequired'] : 0;
+		}
+		include($form);
+	}
+	
+?>
+	</body>
+	</html>
+	

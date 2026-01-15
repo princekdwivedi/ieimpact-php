@@ -1,0 +1,1321 @@
+<?php
+	ob_start();
+	session_start();
+	ini_set('display_errors', 1);
+	error_reporting(E_ALL);
+	include("../root.php");
+	include(SITE_ROOT_EMPLOYEES .  "/includes/new-top.php");
+	include(SITE_ROOT_EMPLOYEES .  "/includes/check-login.php");
+	include(SITE_ROOT_EMPLOYEES .  "/classes/employee.php");
+	include(SITE_ROOT			.  "/includes/common-array.php");
+	include(SITE_ROOT_EMPLOYEES	.  "/includes/common-array.php");
+	include(SITE_ROOT_EMPLOYEES	.  "/includes/set-variables.php");
+	include(SITE_ROOT_EMPLOYEES	.  "/includes/check-pdf-login.php");
+	include(SITE_ROOT_MEMBERS	.  "/classes/members.php");
+	include(SITE_ROOT_EMPLOYEES	.  "/classes/orders.php");
+	include(SITE_ROOT			.  "/classes/validate-fields.php");
+	include(SITE_ROOT			.  "/classes/common.php");
+	include(SITE_ROOT			.  "/classes/email-templates.php");
+    $emailObj					=  new emails();
+	$employeeObj				=  new employee();
+	$memberObj					=  new members();
+	$orderObj					=  new orders();
+	$validator					=  new validate();
+	$commonClass				=  new common();
+	$a_managerEmails			=  $commonClass->getMangersEmails();
+	$errorMsg					=  "";
+	$searchCustomer 			=  "";
+	list($currentY,$currentM,$currentD)	=	explode("-",$nowDateIndia);
+	$form					    =	SITE_ROOT_EMPLOYEES."/forms/create-customer-order.php";
+	$memberId					=	0;
+	$showForm					=	false;
+	$memberId					=	0;
+	$orderId					=	0;
+	$orderAddress				=	"";
+	$displayOtherOrderType		=	"none";
+	$orderType					=	"";
+	$customersOwnOrderText		=	"Enter Other Type";
+	$instructions				=	"";
+	$paymentGatewayId           =	PAYMENT_GATEWAY_AUTHORIZE;
+	$paymentGatewayUsed         =   "Authorize.net";
+	$testKase					=	"";
+	$isIncludedAuthorizedClass  =   0;
+	$noSmsActionNeeded          =   1;
+	$a_attachmentPath           =   array();
+	$a_attachmentType           =   array();
+	$a_attachmentName 			=	array();
+	$totalFileSizeUpload 		=	0;
+
+	function findexts($filename) 
+	{ 
+		$ext        =    "";
+		$filename   =    strtolower($filename) ; 
+		$a_exts		=	 explode(".",$filename);
+		$total		=	 count($a_exts);
+		if($total > 1){
+			$ext	=	 end($a_exts);		
+		}		
+		return $ext; 
+	} 
+	function getFileName($fileName)
+	{
+		$fileName				=   stripslashes($fileName);
+		$dotPosition			=   strpos($fileName, "'");
+		$fileName			    =	stringReplace("'", "", $fileName);
+		$fileName			    =	stringReplace('"', '', $fileName);
+		$fileName				=	stringReplace("/", '', $fileName);
+		$fileName				=	stringReplace(":", '', $fileName);
+		$fileName				=	stringReplace("&", '', $fileName);
+		$fileName				=	stringReplace("*", '', $fileName);
+		$fileName				=	stringReplace("?", '', $fileName);
+		$fileName				=	stringReplace("|", '', $fileName);
+		$fileName				=	stringReplace("<", '', $fileName);
+		$fileName				=	stringReplace(">", '', $fileName);
+		$fileExtPos				=   strrpos($fileName, '.');
+		$fileName				=   substr($fileName,0,$fileExtPos);
+		
+		return $fileName;
+	}
+
+	function getFileSize($fileSize)
+	{
+		if($fileSize <= 0)
+		{
+			$fileSize	=	"";
+		}
+		else
+		{
+			$fileSize	=	$fileSize/1024;
+
+			$fileSize	=	round($fileSize,2);
+
+			$fileSize	=	$fileSize." KB";
+		}
+
+		return $fileSize;
+	}
+
+	/*if($s_employeeId	!=	3){
+
+		echo "<table width='90%' align='center' border='0'><tr><td  height='400' class='error2' style='text-align:center;'><b>We are updating our system, please wait for a while.</b></td></tr></table>";
+	
+
+		include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+		die(); 
+	}*/
+
+	if(isset($_REQUEST['memberId'])){
+		$memberId			=	trim($_REQUEST['memberId']);
+		if(!empty($memberId)){
+			$showForm				=	true;
+			$query					=	"SELECT * FROM members WHERE memberId=$memberId AND isActiveCustomer=1";
+			$result					=	dbQuery($query);
+			if(mysqli_num_rows($result)){
+				$row							=	mysqli_fetch_assoc($result);
+				$memberId						=	$row['memberId'];
+				$firstName						=	stripslashes($row['firstName']);
+				$lastName						=	stripslashes($row['lastName']);
+				$customerName                   =   $firstName." ".substr($lastName, 0, 1);
+				$completeName					=	stripslashes($row['completeName']);
+				$postCode					    =	stripslashes($row['postCode']);
+				$customerEmail				    =	$senderEmail = $row['email'];
+				$secondaryEmail					=	$row['secondaryEmail'];
+				$appraisalSoftwareType			=	$row['appraisalSoftwareType'];
+				$noEmails						=	$row['noEmails'];
+				$memberUniqueEmailCode			=	$smartEmailUniqueEmailCode = $row['uniqueEmailCode'];
+				/////////////// DOUBLE CHECK FOR CUSTOMER UNIQUE EMAIL IF NOT EXISTS//////		
+				if(empty($memberUniqueEmailCode)){
+					$memberUniqueEmailCode      = $commonClass->generateCustomerUniquEmailCode($memberId,$lastName,$postCode);
+				}
+				/////////////////////////////////////////////////////////////////////////////////
+				$customerOwnEta					=	$row['customerOwnEta'];				
+				$folderId						=	$row['folderId'];
+				$totalFreeOrdersAvailable		=	$row['customerFreeOrders'];
+				$isRemindedCard					=	$row['isRemindedCard'];
+				$selectedRemindId				=	$row['selectedRemindId'];
+				$isAskingForPrepiad				=	$row['isAskingForPrepiad'];
+				$isDisplayPrepaid				=	$row['isDisplayPrepaid'];
+				$stripeCustomerId				=	$row['stripeCustomerId'];
+				$memberstotalOrdersPlaced		=	$row['totalOrdersPlaced'];
+				$displayEcheckToCustomer		=	$row['displayEcheck'];
+				$optedForWalletRecharge			=	$row['optedForWalletRecharge'];
+				$autoWalletRechargeAmount		=	$row['autoWalletRechargeAmount'];
+				$customerDeselectAutoRecharge   =   $row['customerDeselectAutoRecharge'];
+				$toPhone  				        =   $row['phone'];
+				if(!empty($toPhone)){
+					$toPhone 					=	"+1".$toPhone;
+				}
+
+				$isRushOrder					=   $customerOwnEta;
+
+				if($appraisalSoftwareType       == 1)
+				{
+					$uploadingFileNameText		=	"Upload Template Aurora *.zap File";
+				}
+				elseif($appraisalSoftwareType   == 2)
+				{
+					$uploadingFileNameText		=	"Upload Template ACI *.aci File";
+				}
+				elseif($appraisalSoftwareType   == 3)
+				{
+					$uploadingFileNameText		=	"Upload Template Clickforms *.clk File";
+				}
+				elseif($appraisalSoftwareType   == 4)
+				{
+					$uploadingFileNameText		=	"Upload Template SFREP *.rpt File";
+				}
+				elseif($appraisalSoftwareType   == 5)
+				{
+					$uploadingFileNameText		=	"Upload Template TOTAL *.zap File";
+				}
+				elseif($appraisalSoftwareType   == 6)
+				{
+					$uploadingFileNameText		=	"Upload Template WCA *.rpt File";
+				}
+			}
+			else{
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES ."/create-customer-order.php");
+				exit();
+			}
+		}
+		else{
+			ob_clean();
+			header("Location: ".SITE_URL_EMPLOYEES ."/create-customer-order.php");
+			exit();
+		}
+	}
+	else{
+		ob_clean();
+		header("Location: ".SITE_URL_EMPLOYEES ."/create-customer-order.php");
+		exit();
+	}
+
+	if($showForm	== true){
+		if(!empty($memberId)){
+			
+			if(isset($_REQUEST['formSubmitted'])){
+				extract($_REQUEST);
+				$orderAddress				=	$t_orderAddress = trim($orderAddress);
+				$txt_orderAddress			=	stripslashes($orderAddress);
+				$txt_instructions			=	stripslashes($instructions);
+
+				$orderAddress				=	makeDBSafe($orderAddress);
+                $instructions				=	makeDBSafe($instructions);
+
+				$validator ->checkField($orderAddress,"","Please enter address.");
+				$validator ->checkField($orderType,"","Please select order type.");
+				if($orderType		==	6)
+				{
+					$displayOtherOrderType		=	"";
+					if($customersOwnOrderText	==	"Enter Other Type")
+					{
+						$customersOwnOrderText	=	"";
+					}
+					if(empty($customersOwnOrderText))
+					{
+						$validator->setError("Please enter other order type.");
+					}
+					else
+					{
+						$customersOwnOrderText	=	trim($customersOwnOrderText);
+						$customersOwnOrderText	=	makeDBSafe($customersOwnOrderText);
+					}
+				}
+				else
+				{
+					$customersOwnOrderText		=	"";
+				}
+
+
+				if(!empty($_FILES['orderFile']['name']))
+				{
+					$orderFileSize		=	 $_FILES['orderFile']['size'];
+
+					if($orderFileSize > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+					{
+						$validator ->setError("The ".stringReplace('Upload ','',$uploadingFileNameText)." you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+					}
+					else{
+						$a_attachmentPath[]         =   $_FILES['orderFile']['tmp_name'];
+						$a_attachmentType[]         =   $_FILES['orderFile']['type'];
+						$a_attachmentName[]			=	$_FILES['orderFile']['name'];
+						$totalFileSizeUpload        =	$totalFileSizeUpload+$orderFileSize;
+
+					}
+				}
+				if(!empty($_FILES['publicRecordFile']['name']))
+				{
+					$publicRecordFileSize =	 $_FILES['publicRecordFile']['size'];
+					if($publicRecordFileSize > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+					{
+						$validator ->setError("The Public Records File you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+					}
+					else{
+						$a_attachmentPath[]         =   $_FILES['publicRecordFile']['tmp_name'];
+						$a_attachmentType[]         =   $_FILES['publicRecordFile']['type'];
+						$a_attachmentName[]			=	$_FILES['publicRecordFile']['name'];
+						$totalFileSizeUpload        =	$totalFileSizeUpload+$publicRecordFileSize;
+					}
+				}
+				if(!empty($_FILES['mlsFile']['name']))
+				{
+					$mlsFileSize		=	 $_FILES['mlsFile']['size'];
+					if($mlsFileSize > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+					{
+						$validator ->setError("The MLS File you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+					}
+					else{
+						$a_attachmentPath[]         =   $_FILES['mlsFile']['tmp_name'];
+						$a_attachmentType[]         =   $_FILES['mlsFile']['type'];
+						$a_attachmentName[]			=	$_FILES['mlsFile']['name'];
+						$totalFileSizeUpload        =	$totalFileSizeUpload+$mlsFileSize;
+					}
+				}
+				if(!empty($_FILES['marketCondition']['name']))
+				{
+					$marketConditionSize	=	 $_FILES['mlsFile']['size'];
+					if($marketConditionSize > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+					{
+						$validator ->setError("The Market Conditions File you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+					}
+					else{
+						$a_attachmentPath[]         =   $_FILES['marketCondition']['tmp_name'];
+						$a_attachmentType[]         =   $_FILES['marketCondition']['type'];
+						$a_attachmentName[]			=	$_FILES['marketCondition']['name'];
+						$totalFileSizeUpload        =	$totalFileSizeUpload+$marketConditionSize;
+					}
+				}
+				if(!empty($_FILES['otherFile']['name']))
+				{
+					$otherFileSize	         =	 $_FILES['otherFile']['size'];
+					if($marketConditionSize > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+					{
+						$validator ->setError("The Field Inspection Notes File you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+					}
+					else{
+						$a_attachmentPath[] =   $_FILES['otherFile']['tmp_name'];
+						$a_attachmentType[] =   $_FILES['otherFile']['type'];
+						$a_attachmentName[]	=	$_FILES['otherFile']['name'];
+						$totalFileSizeUpload=	$totalFileSizeUpload+$otherFileSize;
+					}
+				}
+				
+				$isCheckingTrureOtherSize	=	false;
+				if(!empty($_FILES['file']['name']))
+				{
+					$a_fileSizes		=	$_FILES['file']['size'];
+					foreach($a_fileSizes as $key => $size)
+					{
+						if($size > MAXIMUM_SINGLE_FILE_SIZE_ALLOWED)
+						{
+							$isCheckingTrureOtherSize	=	true;
+
+							break;
+						}
+					}
+				}
+				if($isCheckingTrureOtherSize == true)
+				{
+					$validator ->setError("In more File you are trying to send is very large. It's size must be less than ".MAXIMUM_SINGLE_FILE_SIZE_ALLOWED_TEXT.". Please reduce the filesize by removing large pictures etc.");
+				}
+				else{
+					$a_fileNames	=	$_FILES['file']['name'];
+					$a_fileSizes	=	$_FILES['file']['size'];
+					$a_fileTypes	=	$_FILES['file']['type'];
+					$a_tempNames	=	$_FILES['file']['tmp_name'];
+					foreach($a_fileTypes as $key => $fileType)
+					{
+						$fileName   =	$a_fileNames[$key];	
+						$fileType	=	$a_fileTypes[$key];
+						$fileSize	=	$a_fileSizes[$key];
+						$temp		=	$a_tempNames[$key];
+
+						$a_attachmentPath[] =   $temp;
+						$a_attachmentType[] =   $fileType;
+						$a_attachmentName[]	=	$fileName;
+						$totalFileSizeUpload=	$totalFileSizeUpload+$fileSize;
+					}
+				}
+
+				$dataValid	     =	$validator ->isDataValid();
+				if($dataValid)
+				{
+					$paymentGatewayType				=	PAYMENT_GATEWAY_AUTHORIZE;
+					$paymentGatewayUsed				=   "Authorize.net";
+					$transId						=	0;
+					$new_charge_id					=	0;
+					$inv_no							=	"";
+					$isWalletPayments				=	0;
+					//////////////////////// GET ORDER PRICE ///////////////////////
+					$regularOrderPrice				=	"";
+					$economyOrderPrice				=	"";
+					$rushOrderPrice					=	"";
+					$a_allOrdersPrice				=	$memberObj->getCustomersAllOrderPrice($memberId,$nowDateIndia);
+					$customerSingleOrderPrice		=	$a_allOrdersPrice[1];
+					$customerEconomyOrderPrice		=	$a_allOrdersPrice[2];
+					$desktopRegularOrderPrice		=	$a_allOrdersPrice[3];
+					$desktopEconomyOrderPrice		=	$a_allOrdersPrice[4];
+					$logPrepRegularOrderPrice		=	$a_allOrdersPrice[5];
+					$logPrepEconomyOrderPrice		=	$a_allOrdersPrice[6];
+					
+
+					if(!empty($orderType))
+					{
+						if($orderType					==	19)
+						{
+							$customerSingleOrderPrice	=	$desktopRegularOrderPrice;
+							$customerEconomyOrderPrice	=	$desktopEconomyOrderPrice;
+						}
+						elseif($orderType				==	20)
+						{
+							$customerSingleOrderPrice	=	$logPrepRegularOrderPrice;
+							$customerEconomyOrderPrice	=	$logPrepEconomyOrderPrice;
+						}
+						elseif($orderType				==	21)
+						{
+							$customerSingleOrderPrice	=	REVIEW_NO_DATA_ENTRY_ORDER_PRICE;
+						}
+					}
+					
+					$rushOrderPrice				=	$memberObj->getCustomerRushOrderPrice($memberId,$nowDateIndia);						
+					$regularOrderPrice			=	$customerSingleOrderPrice;
+					$rushOrderPrice				=	$customerSingleOrderPrice+$rushOrderPrice;
+					if($customerSingleOrderPrice<   $customerEconomyOrderPrice)
+					{
+						$economyOrderPrice		=	$customerSingleOrderPrice;
+					}
+					else
+					{
+						$economyOrderPrice		=	$customerEconomyOrderPrice;
+					}
+
+					$economyOrderPrice			=	$economyOrderPrice;
+					if($isRushOrder				==	0)
+					{
+						$check_max_authorization_money	=	$customerSingleOrderPrice;
+					}
+					elseif($isRushOrder			==	1)
+					{
+						$check_max_authorization_money	=	 $rushOrderPrice;
+					}
+					else
+					{
+						$check_max_authorization_money	=	 $economyOrderPrice;
+					}
+
+					//////////////////////////////////////////////////////////////////////
+
+
+					$orderFilePath					=	SITE_ROOT_FILES."/files/orderFiles";
+
+					$walletAmount					=	$employeeObj->getSingleQueryResult("SELECT amount FROM wallet_master WHERE memberId=$memberId","amount");
+					if(empty($walletAmount)){
+						$walletAmount				=   0;
+					}
+
+					$testKase .=	"KASE 1 - CURRENT WALLET AMOUNT - ".$walletAmount;
+
+					$is_allow_to_create_order		=	true;
+					$captureEmailOrderThrough		=	"accounts";
+
+					$totalIncompleteOrders			=	$employeeObj->getSingleQueryResult("SELECT COUNT(*) as total FROM members_orders WHERE memberId=$memberId AND status IN (0,1,3) AND isDeleted=0 AND isVirtualDeleted=0","total");
+					if(empty($totalIncompleteOrders))
+					{
+						$totalIncompleteOrders		=	0;
+					}
+					$availableFree				=	0;
+					if($totalIncompleteOrders	< $totalFreeOrdersAvailable)
+					{
+						$availableFree			=	$totalFreeOrdersAvailable-$totalIncompleteOrders;
+						if($availableFree		==	0)
+						{
+							$availableFree		=	1;
+						}
+					}
+
+					$credit_card_email_sub		=	"";
+					$credit_card_email_msg		=	"";
+					$admin_email_message_case	=	"";
+						
+					////////////////////////////////////////////////////////////////////////////////////
+					/*********************************************************************************/
+					/********** THIS BLOCK TO CHECK AUTHORIZE PAYMENT ACCOUNT DETAILS ***************/
+					$forcedToRechargeWallet =	0;
+					$isAllowPaymentCharge   =	  1;
+					if($isAskingForPrepiad	==	1 && empty($availableFree) && $isDisplayPrepaid == 1)
+					{
+						$testKase .=	"<br />KASE 2 - ASKING FOR PREPAID";
+						
+						if($check_max_authorization_money < MINIMUM_CARD_ORDER_PRICE){
+							$forcedToRechargeWallet =	1;
+							if(empty($optedForWalletRecharge) && empty($autoWalletRechargeAmount) && empty($customerDeselectAutoRecharge)){
+								$optedForWalletRecharge     =   1;
+            					$autoWalletRechargeAmount   =   100;
+
+								 dbQuery("UPDATE members SET optedForWalletRecharge=$optedForWalletRecharge,autoWalletRechargeAmount=$autoWalletRechargeAmount WHERE memberId=$memberId");
+							}
+						}
+						/////////////////////// DOING AUTO RECHARGE WALLET /////////////////////
+						if(!empty($optedForWalletRecharge) && !empty($autoWalletRechargeAmount)){
+							
+							$testKase .=	"<br />KASE 3 - OPTED FOR AUTO RECHARGED";
+							$unverifiedEmailOrders	=	$employeeObj->getSingleQueryResult("SELECT COUNT(*) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_MEMBER_ORDERID." AND memberId=$memberId AND isEmailOrder=1 AND isNotVerfidedEmailOrder=1 AND captureEmailOrderThrough='wallet' AND walletAccountId=0 AND isPaidThroughWallet='no'","total");
+
+							if(!empty($unverifiedEmailOrders)){
+								$unClearedWalletMoney=	$unverifiedEmailOrders*$check_max_authorization_money;
+								if($walletAmount > $unClearedWalletMoney){
+									$walletAmount    =  $walletAmount-$unClearedWalletMoney;
+								}
+							}
+							
+							$makeAutoRecharge		=	0;
+
+							if(empty($walletAmount)){
+								$makeAutoRecharge=	1;
+							}
+							elseif($check_max_authorization_money > $walletAmount){
+								$makeAutoRecharge=	1;
+							}
+							
+							
+							if($makeAutoRecharge == 1){
+								$testKase .=	"<br />KASE 4 - DOING AUTO RECHARGED";
+								include(SITE_ROOT_EMPLOYEES."/includes/auto-recharge-wallet-account.php");
+
+								if(empty($isAllowPaymentCharge)){
+								
+									$errorMsg	 =	"<font color='error'>URGENT AND IMPORTANT: </font>Customer's credit card is getting declined. Please send a message to the customer to update the credit card online on our website. Also contact Melba/Emma or Hemant to follow up.";
+
+
+									$smsMessage       = "MSG from ieIMPACT: Your credit card is getting declined. Please update the credit card online on our website.";
+									include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+
+									include($form);
+									include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+									die();
+								}
+								/*if($memberId == 6){
+									include(SITE_ROOT_EMPLOYEES."/includes/auto-recharge-wallet-account.php");
+								}
+								else{
+									include(SITE_ROOT_EMPLOYEES."/includes/auto-recharge-wallet.php");
+								}*/
+								
+							}
+							
+							$walletAmount		=	$employeeObj->getSingleQueryResult("SELECT amount FROM wallet_master WHERE memberId=$memberId","amount");
+							if(empty($walletAmount)){
+								$walletAmount	=   0;
+							}
+							$testKase .=	"<br />KASE 5 - WALLET AMOUNT - ".$walletAmount;
+						}
+
+						//////////////////////////////////////////////////////////////////////////
+
+						
+						///////////////////// DEDUCT PAYMENTS FROM WALLET /////////////////////////
+						if(!empty($walletAmount) && $walletAmount >= $check_max_authorization_money)
+						{						
+							$testKase .=	"<br />KASE 6 - WALLET AMOUNT GREATER THAN ORDER MONEY -  ".$check_max_authorization_money;
+
+							$unverifiedEmailOrders	=	$employeeObj->getSingleQueryResult("SELECT COUNT(*) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_MEMBER_ORDERID." AND memberId=$memberId AND isEmailOrder=1 AND isNotVerfidedEmailOrder=1 AND captureEmailOrderThrough='wallet' AND walletAccountId=0 AND isPaidThroughWallet='no'","total");
+
+							if(!empty($unverifiedEmailOrders)){
+								$unClearedWalletMoney=	$unverifiedEmailOrders*$check_max_authorization_money;
+								if($walletAmount > $unClearedWalletMoney){
+									$walletAmount    =  $walletAmount-$unClearedWalletMoney;
+
+									$isWalletPayments		    =	1;
+									$captureEmailOrderThrough	=	"wallet";
+
+									$testKase .=	"<br />KASE 7 - CREATE ORDER THROUGH WALLET";
+								}
+							}
+							else{
+								$isWalletPayments				=	1;
+								$captureEmailOrderThrough		=	"wallet";
+								$testKase .=	"<br />KASE 8 - CREATE ORDER THROUGH WALLET";
+								$forcedToRechargeWallet         =   0;
+							}
+						}
+						else{
+							if($forcedToRechargeWallet == 1){
+								$errorMsg	 =	"<font color='error'>There is some payment related issue with this customer. Please dont place order for this customer now.</font>";
+
+								$smsMessage = "MSG from ieIMPACT: Your credit card is getting declined. Please update the credit card online on our website.";
+								include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+
+								include($form);
+								include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+								die();
+							}
+							else
+							{							
+								$testKase .=	"<br />KASE 9 - CREATE ORDER THROUGH NON WALLET";
+								if(!empty($paymentGatewayType)){					
+								
+									if($paymentGatewayType		==	PAYMENT_GATEWAY_AUTHORIZE){
+														
+											$testKase .=	"<br />KASE 10 - CREATE ORDER THROUGH AUTORIZE";
+											///////////////// CAPTURE PAYMENTS IN AUTHORIZE.NET //////////////////////////
+											if(empty($isRemindedCard))
+											{
+												$is_allow_to_create_order	    =	false;
+												$credit_card_email_sub			=	" Failure To Receive Your Order: Missing Credit Card Information.";
+
+												$credit_card_email_msg			=	"Our system failed to receive your order by email since we do not have your payment information on file. Please note all orders must have been paid in advance, so you must provide your payment account information on our website. Please login into your account on <a href='https://secure.ieimpact.com/members' target='_blank'>https://secure.ieimpact.com</a> website and click 'New Order' and click 'Add New Payment' Information. Your credit card information will be securely saved on <a href='https://account.authorize.net/' target='_blank'>authorize.net</a> PCI compliant servers. We do not save any credit card information our local servers.";
+
+												$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason : No card or account added against the account.(Debug Case - I)";
+
+												$smsMessage = "MSG from ieIMPACT: Failure To Receive Your Order. Please update the credit card online on our website.";
+												include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+											}
+											else
+											{
+												$testKase .=	"<br />KASE 11 - SEARCHING AUTORIZE";
+												$serachAccountClause	=	"";
+												if(isset($displayEcheckToCustomer) && $displayEcheckToCustomer == "no"){
+													$serachAccountClause=	" AND remindAccountType <> 'bankaccount'";
+												}
+
+												$query						    =	"SELECT * FROM auto_remember_account_details WHERE memberId=$memberId ".$serachAccountClause." ORDER BY isCurrentlyUsed DESC LIMIT 1";
+												$result							=	dbQuery($query);
+												if(mysqli_num_rows($result))
+												{
+													$testKase .=	"<br />KASE 12 - GET AUTHORIZE";
+
+													$row						=	mysqli_fetch_assoc($result);
+													$customerProfileId			=	$row['customerProfileId'];	
+													$customerShippingAddressId	=	$row['customerShippingAddressId'];
+													$customerPaymentProfileId	=	$row['customerPaymentProfileId'];
+													$creditCardNumberMasked		=	$row['cardLastDigits'];
+
+													$isAllowPaymentCharge       =  $commonClass->checkIsAllowedTransactions($memberId, $customerProfileId, $customerPaymentProfileId);
+
+													if(!empty($isAllowPaymentCharge)){
+
+														$customer_last_id			= $employeeObj->getSingleQueryResult("SELECT orderId FROM members_orders WHERE memberId=$memberId ORDER BY orderId DESC LIMIT 1","orderId");
+
+														$inv_no						=	$customer_last_id.$memberId."N";
+														$item_id					=	rand(111111,999999).$memberId;
+
+														
+														include_once(SITE_ROOT      .   "/classes/authorize.class.php");
+														// Create an object of AuthorizeAPI class
+														$objAuthorizeAPI            =   new AuthorizeAPI(AUTHORIZE_PAYMENT_LOGIN_ID, AUTHORIZE_PAYMENT_TRANSACTION_KEY, 'liveMode');
+														$authResponse           =   $objAuthorizeAPI->authCC($customerProfileId, $customerPaymentProfileId, $check_max_authorization_money, $inv_no, "Authorize customer payment");
+														$authResponse           =   @json_decode($authResponse,TRUE);
+
+														$addedText		=	"Employee ".$s_employeeName." adding new order - ".$orderAddress." for ".$completeName;
+
+														$commonClass	=   $commonClass->trackAuthorizeResponseWithDetails($authResponse,'Authorize.net',0,$memberId,$addedText, $customerProfileId, $customerPaymentProfileId);
+
+											 		    if(array_key_exists('success',$authResponse) && $authResponse['success'] == 1 && array_key_exists('paymentFlag',$authResponse) && $authResponse['paymentFlag'] == 1){
+														
+															$transId	=	htmlspecialchars($authResponse['transId']);
+															
+														}
+														else{
+															$is_allow_to_create_order   =	false;
+
+															$credit_card_email_sub		=	" Failure To Receive Your Order: Missing Credit Card Information.";
+
+															$credit_card_email_msg		=   "Our system failed to receive your order by email since we do not have your payment information on file. Please note all orders must have been paid in advance, so you must provide your payment account information on our website. Please login into your ieIMPACT account on <a href='https://secure.ieimpact.com/members' target='_blank'>https://secure.ieimpact.com</a> website and click 'Standard Instructions' and click 'Add New Payment' Information. <font color='#ff0000;'>Please make sure to resend your order after you enter your credit card on file</font>. Your credit card information will be securely saved on <a href='https://account.authorize.net/' target='_blank'>authorize.net</a> PCI compliant servers. We do not save any credit card information our local servers.";
+
+															$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason : Fail to get transactions ID.(Debug Case - II)";
+
+															$smsMessage = "MSG from ieIMPACT: Failure To Receive Your Order. Please update the credit card online on our website.";
+															include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+														}
+														/////////////////////////////////////////
+													}
+													else{
+														$is_allow_to_create_order   =	false;
+
+														$credit_card_email_sub		=	"Your credit card ending ".$creditCardNumberMasked." is declined.";;
+
+														$credit_card_email_msg		=   "<b>URGENT AND IMPORTANT:</b> Your credit card ending ".$creditCardNumberMasked." is getting declined. Please update your credit card ASAP. Only then our system can allow us to process your orders on time.";
+
+														$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason : Fail to get transactions ID.(Debug Case - II)";
+
+														$smsMessage = "MSG from ieIMPACT: Your credit card ending ".$creditCardNumberMasked." is getting declined. Please update the credit card online on our website.";
+														include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+
+													}													
+												}
+												else{
+													$is_allow_to_create_order		=	false;
+										
+													$credit_card_email_sub			=	" Failure To Receive Your Order: Missing Credit Card Information.";
+
+													$credit_card_email_msg			=	"Our system failed to receive your order by email since we do not have your payment information on file. Please note all orders must have been paid in advance, so you must provide your payment account information on our website. Please login into your ieIMPACT account on <a href='https://secure.ieimpact.com/members' target='_blank'>https://secure.ieimpact.com</a> website and click 'Standard Instructions' and click 'Add New Payment' Information. <font color='#ff0000;'>Please make sure to resend your order after you enter your credit card on file</font>. Your credit card information will be securely saved on <a href='https://account.authorize.net/' target='_blank'>authorize.net</a> PCI compliant servers. We do not save any credit card information our local servers.";
+
+													$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason : The account/card added against the account is not found.(Debug Case - IV)";
+
+													$smsMessage = "MSG from ieIMPACT: Failure To Receive Your Order. Please update the credit card online on our website.";
+													include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+												}
+											}
+
+										}
+										elseif($paymentGatewayType		==	PAYMENT_GATEWAY_STRIPE){
+											////////////////////// MAKE PAYMENT THROUGH /////////////////////////
+											$query						 =	"SELECT * FROM auto_remember_stripe_account_details WHERE memberId=$memberId AND stripeCustomerId='$stripeCustomerId' AND isCurrentlyUsed=1 AND cardId <> '' ORDER BY accountId DESC LIMIT 1";
+											$result						 =	dbQuery($query);
+											if(mysqli_num_rows($result))
+											{
+												$row					 =	mysqli_fetch_assoc($result);
+												$cardId					 =	$row['cardId'];
+												$stripeAccountId		 =	$row['accountId'];
+
+												require_once(SITE_ROOT.'/stripe/init.php');
+												\Stripe\Stripe::setApiKey(STRIPE_SECREAT_KEY);
+
+												$chargeFor				=	$completeName." Email order at EST - ".showDate(CURRENT_DATE_CUSTOMER_ZONE)." ".showTimeShortFormat(CURRENT_TIME_CUSTOMER_ZONE);
+
+												$order_amount_cent		=	$check_max_authorization_money*100;
+
+												try{
+												///////////////////////////// CHARGING CARD ACCOUNT ////////////////////////
+													$charge = \Stripe\Charge::create(array(
+													'amount' => $order_amount_cent, // amount in cents
+													'currency' => 'usd',
+													'customer' => $stripeCustomerId,
+													'capture' => false,
+													'source' => $cardId, // obtained with Stripe.js
+													'description' => $chargeFor
+													));
+
+													$new_charge_id				=	$charge['id'];
+												}
+												catch(Exception $e){
+													$errorMsg					=   $e->getMessage();	
+													
+													$is_allow_to_create_order	=	false;
+														
+													$credit_card_email_sub		=	" Failure To Receive Your Order: Missing Credit Card Information.";
+
+													$credit_card_email_msg		=	"Our system failed to receive your order by email since we do not have your payment information on file. Please note all orders must have been paid in advance, so you must provide your payment account information on our website. Please login into your ieIMPACT account on <a href='https://secure.ieimpact.com/members' target='_blank'>https://secure.ieimpact.com</a> website and click 'Standard Instructions' and click 'Add New Payment' Information. <font color='#ff0000;'>Please make sure to resend your order after you enter your credit card on file</font>. Your credit card information will be securely saved on <a href='https://stripe.com/' target='_blank'>Stripe</a> server. We do not save any credit card information our local servers.";
+
+													$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason Server Error: ".$errorMsg." (Stripe)";
+
+													$smsMessage = "MSG from ieIMPACT: Failure To Receive Your Order. Please update the credit card online on our website.";
+													include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+												}
+											}
+											else{
+												$is_allow_to_create_order	    =	false;
+												$credit_card_email_sub			=	" Failure To Receive Your Order: Missing Credit Card Information.";
+
+												$credit_card_email_msg			=	"Our system failed to receive your order by email since we do not have your payment information on file. Please note all orders must have been paid in advance, so you must provide your payment account information on our website. Please login into your account on <a href='https://secure.ieimpact.com/members' target='_blank'>https://secure.ieimpact.com</a> website and click 'New Order' and click 'Add New Payment' Information. Your credit card information will be securely saved on <a href='https://stripe.com/' target='_blank'>Stripet</a> server. We do not save any credit card information our local servers.";
+
+												$admin_email_message_case		=	"<br /><br />Customer Name : ".$completeName." & Reason : No card or account added against the account(Stripe).";
+
+												$smsMessage = "MSG from ieIMPACT: Failure To Receive Your Order. Please update the credit card online on our website.";
+												include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+											}
+										}
+									}
+								}				
+							}
+
+					    }
+						/////////////////////////////////////////////////////////////////////////
+						/***********************************************************************/
+						/*****************THIS BLOCK CHECKS IS ADDED CIRCUIT BREAKER ***********/
+						$isChekedBreaker			=	false;
+						$isNeedToCheckBreaker		=	0;
+						$latestInvoiceId			=	0;
+						$totalLatestOutStanding		=	0;
+						$isForcedToPay				=	0;
+						if($isAskingForPrepiad != 1 ){
+							$circuitBreakerAmount		=	$memberObj->isCustomerInCircuitBreak($memberId);
+							$circuitBreakerMsg		    =	$memberObj->getCircuitBreakerMessage();
+							$customerTotalOutsatnding	=	$memberObj->getCustomerLatestOutstanding($memberId);
+
+							$getLastInvoiceId			=	$employeeObj->getSingleQueryResult("SELECT invoiceId FROM members_invoice_details WHERE memberId=$memberId ORDER BY invoiceId DESC LIMIT 1","invoiceId");
+						}
+						else{
+							$circuitBreakerAmount		=	0;
+							$circuitBreakerMsg		    =	"";
+							$customerTotalOutsatnding	=	0;
+							$getLastInvoiceId			=	0;
+						}
+						
+						if($isAskingForPrepiad != 1){
+							if(empty($getLastInvoiceId))
+							{
+								$isChekedBreaker		=	true;
+							}
+							else
+							{	
+								//CHECKING FOR LAST INVOICE DETAILS E.G. For Dec Month Checking  - Dec
+								$query1					=	"SELECT * FROM members_invoice_details WHERE memberId=$memberId AND isMailSent=1 AND totalLatestOutStanding <> 0 AND invoiceId=$getLastInvoiceId";
+								$result1	=	dbQuery($query1);
+								if(mysqli_num_rows($result1))
+								{	
+									$row1						=	mysqli_fetch_assoc($result1);
+									$totalMoney					=	$row1['totalMoney'];
+									$lateFees					=	$row1['lateFees'];
+									$totalInvoiceMonthMoney		=	$row1['totalInvoiceMonthMoney'];
+									$totalPaymentReceived		=	$row1['totalPaymentReceived'];
+									$currentInvoiceOutStanding	=   $row1['totalLatestOutStanding'];
+									$latestInvoiceGeneratedOn	=	$row1['invoiceGeneratedOn'];
+									
+									//CHECKING FOR LAST TO LAST INVOICE DETAILS E.G. For Dec Month Checking  - N
+									$totalLatestOutStanding		=	$employeeObj->getSingleQueryResult("SELECT totalLatestOutStanding FROM members_invoice_details WHERE memberId=$memberId AND isMailSent=1 ORDER BY invoiceId DESC LIMIT 1,1","totalLatestOutStanding");
+									if(empty($totalLatestOutStanding))
+									{
+										$minituesFromLastInvoiceToCurrent	=	timeBetweenTwoTimes($latestInvoiceGeneratedOn,CURRENT_TIME_CUSTOMER_ZONE,CURRENT_DATE_CUSTOMER_ZONE,CURRENT_TIME_CUSTOMER_ZONE);
+
+										if($minituesFromLastInvoiceToCurrent >= 44640)
+										{
+											$totalLatestOutStanding		=	$currentInvoiceOutStanding;
+										}
+										else
+										{
+											$totalLatestOutStanding		=	0;
+										}
+									}
+
+									//Checking whether Last invoice amount is greater or less than the outstanding of last to last month . e.g For Dec payment recv with Nov Outstanding
+									if(!empty($totalLatestOutStanding))
+									{
+										if($totalPaymentReceived <  $totalLatestOutStanding)
+										{
+											$ownTrashMoney		=	$employeeObj->getSingleQueryResult("SELECT circuitbreakerIndividualMoney FROM members WHERE memberId=$memberId AND isAddedCircuitBreaker=1","circuitbreakerIndividualMoney");
+											if(!empty($ownTrashMoney))
+											{
+												 if($customerTotalOutsatnding > $ownTrashMoney)
+												 {
+													$isForcedToPay	 =	1;
+												 }
+												 else
+												 {
+													$isForcedToPay	 =	0;
+												 }
+											}
+											else
+											{
+												$isForcedToPay	 =	1;
+											}
+										}
+									}
+								}
+								
+							}
+						}
+
+						if(!empty($circuitBreakerAmount))
+						{
+							if($isForcedToPay		==	1)
+							{
+								$isNeedToCheckBreaker=	1;
+							}
+							elseif($isChekedBreaker			== true)
+							{
+								if($customerTotalOutsatnding >= $circuitBreakerAmount)
+								{
+									$isNeedToCheckBreaker	=	1;
+								}
+							}
+						}
+						
+						/***************************************************************************/
+						if($isNeedToCheckBreaker	==	1 && $isWalletPayments == 0)
+						{
+							$memberObj->checkCustomerCircuitBreaker($memberId);
+							$thresholdEmailMsg	=	"Customer is forced to show threshold";
+
+							$uniqueTemplateName	=	"TEMPLATE_SENDING_SIMPLEE_CUSTOMER_MESSAGE";
+							$toEmail			=	$customerEmail;
+						
+							$thresholdEmailBody	=	nl2br($circuitBreakerMsg);
+
+							$thresholdSub		=	"Please clear your dues before placing a new order";
+
+							$a_templateSubject	=	array("{emailSubject}"=>$thresholdSub);
+
+							$a_templateData		=	array("{completeName}"=>$completeName,"{emailBody}"=>$thresholdEmailBody);
+
+							include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+
+							if(!empty($sendingCCEmailForMultiple)){
+								$toEmail			=	$sendingCCEmailForMultiple;
+								include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+							}
+
+							/*************** SENDING EMAIL TO MANAGER **********************/
+							$toEmail			=	"john@ieimpact.net";
+						
+							$thresholdEmailBody	=	$completeName." saw credit threshold page while placing new orders on ".showDate(CURRENT_DATE_CUSTOMER_ZONE)." ".CURRENT_TIME_CUSTOMER_ZONE." EST. through email. He/She needs to pay first to place a new order. Total outstanding is : ".$customerTotalOutsatnding;
+
+							$thresholdSub		=	$completeName." hit credit threshold limit from email order";
+
+							$a_templateSubject	=	array("{emailSubject}"=>$thresholdSub);
+
+							$a_templateData		=	array("{completeName}"=>"John Bowen","{emailBody}"=>$thresholdEmailBody);
+
+							include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+						}
+						else
+						{
+							if($is_allow_to_create_order	==	false){
+								
+								$uniqueTemplateName	=	"TEMPLATE_SENDING_SIMPLEE_CUSTOMER_MESSAGE";
+								$toEmail			=	$customerEmail;
+
+															
+								$a_templateSubject	=	array("{emailSubject}"=>$credit_card_email_sub);
+
+								$a_templateData		=	array("{completeName}"=>$completeName,"{emailBody}"=>$credit_card_email_msg);
+
+								include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+
+								if(!empty($sendingCCEmailForMultiple)){
+									$toEmail			=	$sendingCCEmailForMultiple;
+									include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+								}
+
+								/*********** SENDING EMAIL TO MANAGER **********************/
+								$uniqueTemplateName	=	"TEMPLATE_ERROR_ORDER_PLACED_EMAIL";
+                                $toEmail			=	"john@ieimpact.net";
+                                //$toEmail			=	"gaurabsiva1@gmail.com";
+
+                                $emailSubject		=	"Failure To Create Email Orders By :". $s_employeeName." for - ".$completeName;
+
+                                $a_templateSubject	=	array("{orderSubject}"=>$emailSubject);
+
+                                $orderDate			=	showDate($customer_zone_date);
+                                $t_orderType		=	$a_addingCustomerOrderTypes[$orderType]." ".$customersOwnOrderText;
+
+                                $orderDateTime      =   showDateTimeUsaFormat(CURRENT_DATE_CUSTOMER_ZONE,CURRENT_TIME_CUSTOMER_ZONE);
+
+                                $a_templateData			=	array("{name}"=>"John","{messageToManager}"=>"(Employee creating email orders for ".$completeName.")", "{orderAddress}"=>$txt_orderAddress, "{typeText}"=>$t_orderType, "{reoForm}"=>"N/A", "{financingVa}"=>"N/A", "{financingFha}"=>"N/A", "{financingHud}"=>"N/A", "{nonUad}"=>"N/A", "{eta}"=>"6 HRS", "{orderDateTime}"=>$orderDateTime, "{error}"=>$admin_email_message_case, "{instructions}"=>$txt_instructions);
+
+								if(!empty($a_attachmentPath) && count($a_attachmentPath) > 0 && !empty($totalFileSizeUpload) && $totalFileSizeUpload <= 7340032){
+									$hasAttachment      =  1;
+								}
+
+								include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+								$hasAttachment    	    =  0;
+
+								if(empty($isAllowPaymentCharge)){
+									$errorMsg	 =	"<font color='error'>Customer's credit card is getting declined. Please send a message to the customer to update the credit card online on our website. Also contact Melba/Emma or Hemant to follow up.</font>";
+
+									$smsMessage     = "MSG from ieIMPACT: Your credit card is getting declined. Please update the credit card online on our website.";
+									include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+								}
+								else{
+									$errorMsg	 =	"<font color='error'>There is some payment related issue with this customer. Please dont place order for this customer now.</font>";
+
+									$smsMessage        = "MSG from ieIMPACT: Your credit card is getting declined. Please update the credit card online on our website.";
+									include(SITE_ROOT_EMPLOYEES .  "/includes/sending-sms-customer.php");
+									
+								}
+
+								
+							}
+							else{
+							
+								if(empty($folderId))
+								{
+									$folderId	=	$memberId."_".substr(md5(rand()+date('s')),0,40);
+									dbQuery("UPDATE members SET folderId='$folderId' WHERE memberId=$memberId");
+								}
+
+								if(!is_dir($orderFilePath."/$folderId"))
+								{
+									@mkdir($orderFilePath."/$folderId");
+								}					
+
+								$orderFilePath			=	SITE_ROOT_FILES."/files/orderFiles/$folderId";
+
+								if(empty($fromemailSubject))
+								{
+									$fromemailSubject	=	"Order From Email";
+								}						
+								
+
+								/////////// CREATE UNIQUE EMAIL REPLY TO EMAIL /////////////
+								$memberstotalOrdersPlaced		  =	$memberstotalOrdersPlaced+1;
+								$memberOrderReplyToEmail	      =	$memberstotalOrdersPlaced;
+								//REMOVED ON 3rd NOV,2019
+								$memberOrderReplyToEmail		  =	$memberUniqueEmailCode.$memberOrderReplyToEmail;
+
+								$memberOrderReplyToEmail		  =	makeDBSafe($memberOrderReplyToEmail);
+
+								if($isRushOrder			==	0)
+                                {
+                                    $addingRequiredHrs	=	STANDRAD_ORDER_COMPLETE_TIME_HOURS;
+                                }
+                                elseif($isRushOrder		==	2)
+                                {
+                                    $addingRequiredHrs	=	ECONOMY_ORDER_COMPLETE_TIME_HOURS;
+                                }
+                                else
+                                {
+                                    $addingRequiredHrs	=	RUSH_ORDER_COMPLETE_TIME_HOURS;
+                                }
+                                $warningDateTimeEmployee=	getNextCalculatedHours($nowDateIndia,$nowTimeIndia,$addingRequiredHrs);
+
+                                list($warningOrderDate,$warningOrderTime)	=	explode("=",$warningDateTimeEmployee);
+								
+							
+								$query	 =	"INSERT INTO members_orders SET memberId=$memberId,orderAddress='$orderAddress',orderType=$orderType,instructions='$instructions',orderAddedOn='$nowDateIndia',orderAddedTime='$nowTimeIndia',estDate='".CURRENT_DATE_CUSTOMER_ZONE."',estTime='".CURRENT_TIME_CUSTOMER_ZONE."',isNewUploadingSystem=1,isEmailOrder=1,isNotVerfidedEmailOrder=1,captureEmailOrderThrough='$captureEmailOrderThrough',isEmailMessageOrder='yes',emailMadeOrderBy=$s_employeeId,orderReplyToEmail='$memberOrderReplyToEmail',isHavingEstimatedTime=1,employeeWarningDate='$warningOrderDate',employeeWarningTime='$warningOrderTime'";
+								dbQuery($query);
+								$orderId =	mysqli_insert_id($db_conn);
+
+								////////////////////////////////////////////////////////////////////////////
+								//////////////////// PUTTING THE ORDER IN ORDER TRACK LIST /////////////////
+							     $orderObj->addOrderTrackList($memberId,$s_employeeId,$orderId,$t_orderAddress,'Employee created customer new order','EMPLOYEE_CREATED_CUSTOMER_ORDER');
+							    ////////////////////////////////////////////////////////////////////////////
+							    ////////////////////////////////////////////////////////////////////////////
+								$testKase .=	"<br />KASE 14 - CREATED ORDER - ".$orderId." AND captureEmailOrderThrough - ".$captureEmailOrderThrough;
+
+								if($memberId == 2509){
+
+									$testKase  = makeDBSafe($testKase);
+
+									dbQuery("INSERT INTO testing_table SET testID=$orderId,testValue='$testKase'");
+								}
+
+								dbQuery("UPDATE members SET totalOrdersPlaced=totalOrdersPlaced+1,lastOrderAddedOn='$nowDateIndia' WHERE memberId=$memberId");
+
+								//dbQuery("INSERT INTO orders_new_checkboxes SET orderId=$orderId");
+							
+								$orderFilePath1		=   $orderFilePath."/".$nowDateIndia;
+
+								if(!is_dir($orderFilePath1))
+								{
+									@mkdir($orderFilePath1);
+									@chmod($orderFilePath1,0700);
+								}
+
+								$newOrderFilePath	=  $orderFilePath1."/".$orderId;	
+
+								if(!is_dir($newOrderFilePath))
+								{
+									@mkdir($newOrderFilePath);
+									@chmod($newOrderFilePath,0700);
+								}
+
+								if($isWalletPayments == 1 && $captureEmailOrderThrough == "wallet"){
+									dbQuery("UPDATE wallet_master SET amount=amount-$check_max_authorization_money WHERE memberId=$memberId");
+
+									$walletAmount	=	$employeeObj->getSingleQueryResult("SELECT amount FROM wallet_master WHERE memberId=$memberId","amount");
+									$walletAmount	=	round($walletAmount,2);
+												
+									dbQuery("INSERT INTO wallet_transactions SET memberId=$memberId,amount='$check_max_authorization_money',transactionType='debit',debitType='orders',transactionDate='".CURRENT_DATE_INDIA."',transactionTime='".CURRENT_TIME_INDIA."',estTransactionDate='".CURRENT_DATE_CUSTOMER_ZONE."',estTransactionTime='".CURRENT_TIME_CUSTOMER_ZONE."',status='success',ipAddress='".VISITOR_IP_ADDRESS."',orderId=$orderId,orderAddress='$orderAddress',currentBalance='$walletAmount'");
+
+									$walletAccountId=  mysqli_insert_id($db_conn);
+
+									$extra_columns	=	",isPaidThroughWallet='yes',walletAccountId=$walletAccountId,prepaidOrderPrice='$check_max_authorization_money'";
+
+									 /////////////// THIS IS TO SEND LOW WALLET BALANCE TO USERS ///////////////////////////////////////////////
+                                    if(EMAIL_ORDER_DEFAULT_AUTHORIZE_PRICE > $walletAmount && $optedForWalletRecharge != 1){
+                                    	include(SITE_ROOT_MEMBERS."/includes/sending-low-wallet-email.php");	
+                                    }		
+								}
+								elseif(!empty($transId) && !empty($inv_no))
+								{
+									$extra_columns	=	",isAuthorizedEmailOrder=1,prepaidTransactionId=$transId,usedDebitAccountId=$selectedRemindId,customerProfileId='$customerProfileId',customerShippingAddressId='$customerShippingAddressId',customerPaymentProfileId='$customerPaymentProfileId',creditCardNumberMasked='$creditCardNumberMasked',invNo='$inv_no',item_id='$item_id',prepiadPaymentThrough='creditcard',isRushOrder=$isRushOrder,paymentGateway='Authorize.net'";	
+								}
+								elseif(!empty($new_charge_id)){
+									$extra_columns	=	",chargeId='$new_charge_id',prepiadPaymentThrough='creditcard',paymentGateway='Stripe',usingStripeAccountId=$stripeAccountId,isRushOrder=$isRushOrder,isAuthorizedEmailOrder=1";
+								}
+								else
+								{
+									$extra_columns		=	"";
+								}
+
+								$md5OrderId				=	md5($orderId);
+
+								$orderEncryptedId	    =	@hash_hmac('ripemd160', $md5OrderId, 'Chenaiiexpress');
+		                        //////////////////////////////////////////////////////////////////
+                              	dbQuery("UPDATE members_orders SET newUploadingPath='$newOrderFilePath',encryptOrderId='$orderEncryptedId'".$extra_columns." WHERE orderId=$orderId AND memberId=$memberId");
+
+								 if(!empty($_FILES['orderFile']['name']))
+								{
+									$uploadingFile			=   $_FILES['orderFile']['name'];
+									$mimeType				=   $_FILES['orderFile']['type'];
+									$fileSize				=   $_FILES['orderFile']['size'];
+									$tempName				=	$_FILES['orderFile']['tmp_name'];
+									$ext					=	findexts($uploadingFile);
+									$uploadingFileName		=	getUploadedSingleFileName($uploadingFile);
+									$t_uploadingFile		=	makeDBSafe($uploadingFileName);				
+
+									dbQuery("INSERT INTO order_all_files SET uploadingType=1,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$mimeType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+									$fileId					=	mysqli_insert_id($db_conn);
+
+									$destFileName			=	$newOrderFilePath."/".$fileId."_".$uploadingFileName.".".$ext;
+
+									move_uploaded_file($tempName,$destFileName);
+
+									$orderFileMd5HasSize	=	md5_file($destFileName);
+									if(empty($orderFileMd5HasSize))
+									{
+										$orderFileMd5HasSize=	"";
+									}
+
+									dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName',fileChecksumHas='$orderFileMd5HasSize' WHERE fileId=$fileId AND orderId=$orderId");
+
+									$cronFileName	=	$uploadingFileName.".".$ext;
+
+									$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,1,$completeName,$orderAddress,$fileId);
+
+									$a_filesUploaded[]	=	$uploadingFileName.".".$ext."|".$fileSize;
+
+								}
+								if(!empty($_FILES['publicRecordFile']['name']))
+								{
+									$uploadingFile		=   $_FILES['publicRecordFile']['name'];
+									$mimeType			=   $_FILES['publicRecordFile']['type'];
+									$fileSize			=   $_FILES['publicRecordFile']['size'];
+									$tempName			=	$_FILES['publicRecordFile']['tmp_name'];
+									$ext				=	findexts($uploadingFile);
+									$uploadingFileName	=	getUploadedSingleFileName($uploadingFile);
+									$t_uploadingFile	=	makeDBSafe($uploadingFileName);				
+
+									dbQuery("INSERT INTO order_all_files SET uploadingType=2,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$mimeType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+									$fileId					=	mysqli_insert_id($db_conn);
+
+									$destFileName			=	$newOrderFilePath."/".$fileId."_".$uploadingFileName.".".$ext;
+
+									move_uploaded_file($tempName,$destFileName);
+
+
+									dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName' WHERE fileId=$fileId AND orderId=$orderId");
+
+									$cronFileName	=	$uploadingFileName.".".$ext;
+
+									$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,2,$completeName,$orderAddress,$fileId);
+
+									$a_filesUploaded[]	=	$uploadingFileName.".".$ext."|".$fileSize;
+								}
+								if(!empty($_FILES['mlsFile']['name']))
+								{
+									$uploadingFile		=   $_FILES['mlsFile']['name'];
+									$mimeType			=   $_FILES['mlsFile']['type'];
+									$fileSize			=   $_FILES['mlsFile']['size'];
+									$tempName			=	$_FILES['mlsFile']['tmp_name'];
+									$ext				=	findexts($uploadingFile);
+									$uploadingFileName	=	getUploadedSingleFileName($uploadingFile);
+									$t_uploadingFile	=	makeDBSafe($uploadingFileName);				
+
+									dbQuery("INSERT INTO order_all_files SET uploadingType=3,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$mimeType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+									$fileId					=	mysqli_insert_id($db_conn);
+
+									$destFileName			=	$newOrderFilePath."/".$fileId."_".$uploadingFileName.".".$ext;
+
+									move_uploaded_file($tempName,$destFileName);
+
+
+									dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName' WHERE fileId=$fileId AND orderId=$orderId");
+
+									$cronFileName	=	$uploadingFileName.".".$ext;
+
+									$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,3,$completeName,$orderAddress,$fileId);
+
+									$a_filesUploaded[]	=	$uploadingFileName.".".$ext."|".$fileSize;
+								}
+								if(!empty($_FILES['marketCondition']['name']))
+								{
+									$uploadingFile		=   $_FILES['marketCondition']['name'];
+									$mimeType			=   $_FILES['marketCondition']['type'];
+									$fileSize			=   $_FILES['marketCondition']['size'];
+									$tempName			=	$_FILES['marketCondition']['tmp_name'];
+									$ext				=	findexts($uploadingFile);
+									$uploadingFileName	=	getUploadedSingleFileName($uploadingFile);
+									$t_uploadingFile	=	makeDBSafe($uploadingFileName);				
+
+									dbQuery("INSERT INTO order_all_files SET uploadingType=4,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$mimeType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+									$fileId					=	mysqli_insert_id($db_conn);
+
+									$destFileName			=	$newOrderFilePath."/".$fileId."_".$uploadingFileName.".".$ext;
+
+									move_uploaded_file($tempName,$destFileName);
+
+
+									dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName' WHERE fileId=$fileId AND orderId=$orderId");
+
+									$cronFileName	=	$uploadingFileName.".".$ext;
+
+									$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,4,$completeName,$orderAddress,$fileId);
+
+									$a_filesUploaded[]	=	$uploadingFileName.".".$ext."|".$fileSize;
+								}
+								if(!empty($_FILES['otherFile']['name']))
+								{
+									$uploadingFile		=   $_FILES['otherFile']['name'];
+									$mimeType			=   $_FILES['otherFile']['type'];
+									$fileSize			=   $_FILES['otherFile']['size'];
+									$tempName			=	$_FILES['otherFile']['tmp_name'];
+									$ext				=	findexts($uploadingFile);
+									$uploadingFileName	=	getUploadedSingleFileName($uploadingFile);
+									$t_uploadingFile	=	makeDBSafe($uploadingFileName);				
+
+									dbQuery("INSERT INTO order_all_files SET uploadingType=5,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$mimeType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+									$fileId					=	mysqli_insert_id($db_conn);
+
+									$destFileName			=	$newOrderFilePath."/".$fileId."_".$uploadingFileName.".".$ext;
+
+									move_uploaded_file($tempName,$destFileName);
+
+
+									dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName' WHERE fileId=$fileId AND orderId=$orderId");
+
+									$cronFileName	=	$uploadingFileName.".".$ext;
+
+									$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,5,$completeName,$orderAddress,$fileId);
+
+									$a_filesUploaded[]	=	$uploadingFileName.".".$ext."|".$fileSize;
+								}
+								if(!empty($_FILES['file']['name']))
+								{
+									$a_fileNames	=	$_FILES['file']['name'];
+									$a_fileSizes	=	$_FILES['file']['size'];
+									$a_fileTypes	=	$_FILES['file']['type'];
+									$a_tempNames	=	$_FILES['file']['tmp_name'];
+									foreach($a_fileTypes as $key => $fileType)
+									{
+										$fileName		=	$a_fileNames[$key];	
+										$fileType		=	$a_fileTypes[$key];
+										$fileSize		=	$a_fileSizes[$key];
+										$temp			=	$a_tempNames[$key];
+										$ext			=	findexts($fileName);
+										$fileName		=	getUploadedSingleFileName($fileName);
+
+										if(!empty($fileName) && !empty($fileType))
+										{
+											$t_uploadingFile	=	makeDBSafe($fileName);			dbQuery("INSERT INTO order_all_files SET uploadingType=6,uploadingFor=1,orderId=$orderId,memberId=$memberId,uploadingFileName='$t_uploadingFile',uploadingFileExt='$ext',uploadingFileType='$fileType',uploadingFileSize=$fileSize,addedOn='".CURRENT_DATE_INDIA."',addedTime='".CURRENT_TIME_INDIA."',customerZoneDate='".CURRENT_DATE_CUSTOMER_ZONE."',customerZoneTime='".CURRENT_TIME_CUSTOMER_ZONE."',addedFromIp='".VISITOR_IP_ADDRESS."'");
+
+											$fileId					=	mysqli_insert_id($db_conn);
+
+											$destFileName			=	$newOrderFilePath."/".$fileId."_".$fileName.".".$ext;
+
+											move_uploaded_file($temp,$destFileName);
+
+
+											dbQuery("UPDATE order_all_files SET excatFileNameInServer='$destFileName' WHERE fileId=$fileId AND orderId=$orderId");
+
+											$cronFileName	=	$fileName.".".$ext;
+
+											$memberObj->addEditMultipleFilesCronTransfer($orderId,$nowDateIndia,$memberId,$folderId,$destFileName,$cronFileName,6,$completeName,$orderAddress,$fileId);
+
+											$a_filesUploaded[]	=	$fileName.".".$ext."|".$fileSize;
+										}
+									}
+								}
+
+								$performedTask	=	"Created new email order from employee area";
+				
+								$orderObj->trackEmployeeWork($orderId,$s_employeeId,$performedTask);
+
+							
+								
+								$orderNo				=	removeNewLineChracters($orderAddress);
+								$orderInstructions		=	removeNewLineChracters($instructions);
+								/////////////////// START OF SENDING EMAIL BLOCK/////////////////////////
+								
+								$filesUploaded			=	"";
+								if(!empty($a_filesUploaded))
+								{
+									$filesUploaded	   .=	"<table width='98%' align='center' border='0' cellpadding='2' cellspacing='0'>";
+									foreach($a_filesUploaded as $key=>$value)
+									{
+										list($uploadedFileName,$uploadedFileSize)	=	explode("|",$value);
+										
+										if(!empty($uploadedFileSize))
+										{
+											$uploadedFileSizeText	=	"&nbsp;<font size='2px' face='verdana' color='#4d4d4d'>(".getFileSize($uploadedFileSize).")</font>";
+										}
+										else
+										{
+											$uploadedFileSizeText	=	"&nbsp;<font size='2px' face='verdana' color='#ff0000'>(ZERO BYTES : Please Upload Again)</font>";
+										}
+
+										$filesUploaded .=	"<tr><td valign='top'><font size='2px' face='verdana' color='#787878'>".$uploadedFileName.$uploadedFileSizeText."</font></td></tr>";
+									}
+
+									$filesUploaded	   .=	"</table>";
+								}
+								else
+								{
+									$filesUploaded		=	"No File Uploaded";
+								}
+
+								$setThisEmailReplyToo			=	$memberOrderReplyToEmail.CUSTOMER_REPLY_EMAIL_TO;//Setting for reply to make customer reply order mesage
+								$setThisEmailReplyTooName		=	"ieIMPACT Orders";//Setting for reply to make customer reply order mesage
+
+								$quickReplyToEmail     = "<a href='mailto:".$setThisEmailReplyToo."'><u>".$setThisEmailReplyToo."</u></a>";
+
+								$newOrdersSmartEmail 			=	"<a href='mailTo:NewOrder".$smartEmailUniqueEmailCode.CUSTOMER_REPLY_EMAIL_TO."'><u>NewOrder".$smartEmailUniqueEmailCode.CUSTOMER_REPLY_EMAIL_TO."</u></a>";
+
+								$newOrdersMessagingEmail 		=	"<a href='mailTo:Email".$smartEmailUniqueEmailCode.CUSTOMER_REPLY_EMAIL_TO."'><u>Email".$smartEmailUniqueEmailCode.CUSTOMER_REPLY_EMAIL_TO."</u></a>";
+						
+								
+								
+								$a_templateData	=	array("{completeName}"=>$completeName,"{filesUploaded}"=>$filesUploaded,"{orderInstructions}"=>$orderInstructions,"{quickReplyToEmail}"=>$quickReplyToEmail,"{newOrdersSmartEmail}"=>$newOrdersSmartEmail,"{newOrdersMessagingEmail}"=>$newOrdersMessagingEmail);
+							
+								$a_templateSubject		=	array("{orderAddress}"=>$orderNo);
+
+								$uniqueTemplateName		=	"TEMPLATE_SENDING_CUSTOMER_EMAIL_ORDER_RECEIVED";
+								$toEmail				=	$customerEmail;
+								if($noEmails == 0)
+								{
+									include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+
+									if(!empty($secondaryEmail))
+									{
+										$toEmail		=	$secondaryEmail;
+										include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+									}
+
+									if(!empty($sendingCCEmailForMultiple)){
+										$toEmail		=	$sendingCCEmailForMultiple;
+										include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+									}
+
+								}
+								
+								$uniqueTemplateName	=	"TEMPLATE_SENDING_CUSTOMER_EMAIL_ORDER_RECEIVED";
+								$toEmail			=	"john@ieimpact.net";
+								//$toEmail			=	"gaurabieimpact1@gmail.com";
+
+								include(SITE_ROOT."/includes/sending-dynamic-admin-emails.php");
+								
+								/////////////////// END OF SENDING EMAIL BLOCK/////////////////////////
+								$_SESSION['successPlaced']= 1;
+
+								ob_clean();
+								header("Location: ".SITE_URL_EMPLOYEES ."/employee-place-customer-order.php?memberId=".$memberId);
+								exit();
+							}
+							
+						}
+										
+					
+				}
+				else{
+					$errorMsg	 =	$validator ->getErrors();
+				}
+			}
+			include($form);
+		}
+		else{
+			echo "<table width='90%' align='center' border='0'><tr><td  height='400' class='error2' style='text-align:center;'><b>Please search a active customer.</b></td></tr></table>";
+		}
+	}
+	else{
+		echo "<table width='90%' align='center' border='0'><tr><td  height='400' class='error2' style='text-align:center;'><b>Please search a customer.</b></td></tr></table>";
+	}
+
+	include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+?>

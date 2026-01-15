@@ -1,0 +1,1333 @@
+<?php
+	ob_start();
+	session_start();
+	error_reporting(E_ALL);
+	ini_set('display_errors', 1);
+	include("../root.php");
+	include(SITE_ROOT_EMPLOYEES .   "/includes/new-top.php");
+	include(SITE_ROOT_EMPLOYEES .   "/includes/check-login.php");
+	include(SITE_ROOT_EMPLOYEES .   "/classes/employee.php");
+	include(SITE_ROOT			.   "/includes/common-array.php");
+	include(SITE_ROOT_EMPLOYEES	.   "/includes/common-array.php");
+	$employeeObj				=   new employee();
+	include(SITE_ROOT_EMPLOYEES	.   "/includes/set-variables.php");
+	include(SITE_ROOT_EMPLOYEES	.   "/includes/check-pdf-login.php");
+	if($s_employeeId		==	"3"){
+		include(SITE_ROOT		.   "/classes/pagingclass-test.php");
+		//include(SITE_ROOT		.   "/classes/pagingclass1.php");
+	}
+	else{
+		include(SITE_ROOT		.   "/classes/pagingclass1.php");
+	}
+	
+	include(SITE_ROOT_MEMBERS	.   "/classes/members.php");
+	include(SITE_ROOT_EMPLOYEES	.   "/classes/orders.php");
+	include(SITE_ROOT			.   "/classes/common.php");
+	//$totalAvailabaleOrdersToProces = 0; //This is to allow employee for accept maximum number of orders
+	$pagingObj					=   new Paging();
+	$memberObj					=   new members();
+	$orderObj					=   new orders();
+	$commonObj					=   new common();
+	$showSubmittedResult		=	false;
+	$searchOrderType			=	0;
+	$searchOrderTime			=	0;
+	$searchFileType				=	0;
+	$searchCustomerType			=	0;
+	$searchRushSketch			=	-1;
+	$searchOrder				=	"";
+	$t_searchOrder				=	"";
+	$searchName					=	"";
+	$fromDate					=	"";
+	$endDate					=	"";
+	$serachOrderIdNumber		=	"";
+	$serachCustomerStates		=	"";
+	$showPageOrders				=	30;
+	$textRed					=	"NAME";
+	$isSearchedResultByName		=	0;
+	$totalOrdersOfAnSingleUser	=	0;
+	$totalUnReplied	            =	0;
+	$totalUnReplied	            =   $orderObj->checkAcceptedReplyOrder($s_employeeId);
+
+	if(isset($_SESSION['showTestQuestionId']) && $_SESSION['showTestQuestionId'] != ""){
+		ob_clean();
+		header("Location: ".SITE_URL_EMPLOYEES."/employee-test-questions.php");
+		exit();
+	}
+	
+	$allTotalCustomersNewOrders	=	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status=0 AND orderAddedOn >= '2012-04-01' AND isDeleted=0 AND isVirtualDeleted=0 AND isNotVerfidedEmailOrder=0","total");
+
+	$totalUnrepliedOrdersMsg	=	$orderObj->getTotalUnrepliedOrderMessage();
+	$totalUnrepliedRatingMsg	=	$orderObj->getAllTotalUnrepliedRatingMessage();
+	$a_unrepliedGeneralMsg		=	$orderObj->getAllUnrepliedGeneralMessageCustomers();
+	$totalUnrepliedGeneralMsg   =   count($a_unrepliedGeneralMsg);
+	$totalUncheckedOrders		=	$orderObj->getAllTotalUncheckedOrders();
+	$totalExceedTatOrders		=	$orderObj->getAllTotalExceedTatOrders();
+	$a_allDeactivatedEmployees  =	$employeeObj->getAllInactiveEmployees();
+	$a_fisrtThirtyOrdersList 	=   $orderObj->getFirstThirtyNewOrders();//Make it blank as remove 30 orders check
+	$a_bypassTatExplnation   	=   $orderObj->getByPassTatExplanationCustomers();
+
+	$thirtyOrdersEmployee 	    =	$employeeObj->getSingleQueryResult("SELECT setting FROM website_global_settings WHERE type='PICK_FIRST_THIRTY_ORDERS_EMPLOYEE'","setting");//1 means Show Old login for single to both PDF and MT and 2 means new show sarate login for both MT and PDF
+
+	$_SESSION['s_allTotalUnrepliedOrderMsg']   = $totalUnrepliedOrdersMsg;
+    $_SESSION['s_allTotalUnrepliedRatingMsg']  = $totalUnrepliedRatingMsg;
+	$_SESSION['s_allTotalUnrepliedGeneralMsg'] = $totalUnrepliedGeneralMsg;
+	$_SESSION['s_allTotalUncheckedOrders']	   = $totalUncheckedOrders;
+	$_SESSION['s_allTotalExceedTatOrders']	   = $totalExceedTatOrders;
+
+	
+	$redirectToPage				=	"";
+	//$table						=	"members_orders INNER JOIN members ON members_orders.memberId=members.memberId ";
+	$table						=   "members_orders INNER JOIN members ON members_orders.memberId=members.memberId LEFT JOIN members_orders_reply ON members_orders.orderId=members_orders_reply.orderId";
+
+	$a_existingCustomerRatings	=	array("1"=>"Poor","2"=>"Average","3"=>"Good","4"=>"very Good","5"=>"Excellent");
+
+	$a_searchOrderType			=	array("1"=>"New","2"=>"Accepted","3"=>"Completed","4"=>"Incompleted","5"=>"Need Attention");
+
+	$a_searchOrderTime			=	array("0"=>"All","1"=>"EST","2"=>"CST","3"=>"PST","5"=>"MST","4"=>"HST");
+
+	$a_searchCustomerType		=	array("0"=>"All","1"=>"New","2"=>"Trial");
+
+	$a_searchOrderFileType		=	array("0"=>"All","1"=>"Aurora","2"=>"ACI","3"=>"CLK","4"=>"RPT","5"=>"TOTAL");
+
+	$a_searchRushSketch			=	array("-1"=>"All","2"=>"24 Hours","0"=>"12 Hours","1"=>"6 Hours","3"=>"Getting Late");
+	
+	$form						=	SITE_ROOT_EMPLOYEES."/forms/searching-common-pdf-orders.php";
+	$noRecordsFoundFor			=	"";
+
+	if(isset($_REQUEST['searchFormSubmit']))
+	{
+		extract($_REQUEST);
+		//pr($_REQUEST);
+		if(!empty($searchOrderType))
+		{
+			$redirectToPage			.=	"&searchOrderType=".$searchOrderType;
+		}
+		if(!empty($searchOrder))
+		{
+			$searchOrder			 =  stringReplace("#","<=>",$searchOrder);
+			$redirectToPage			.=	"&searchOrder=".$searchOrder;
+		}
+		if($searchRushSketch		 != "-1")
+		{
+			$redirectToPage			.=	"&searchRushSketch=".$searchRushSketch;
+		}
+		if(!empty($searchText))
+		{
+			$searchText				 =	trim($searchText);
+			if(is_numeric($searchText))
+			{
+				$redirectToPage		.=  "&serachCustomerById=$searchText";
+			}
+			else
+			{
+				$redirectToPage		.=	"&searchName=$searchText";
+			}
+		}
+		
+		ob_clean();
+		header("Location: ".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1".$redirectToPage);
+		exit();
+	}
+	if(isset($_REQUEST['recNo']))
+	{
+		$recNo						=	(int)$_REQUEST['recNo'];
+	}
+	if(empty($recNo))
+	{
+		$recNo						=	0;
+	}
+
+	if(isset($_SESSION['isSearchPDFByRatings']))
+	{
+		unset($_SESSION['isSearchPDFByRatings']);
+	}
+
+	$s_isSearchByCustomerOrderType	=	0;
+	$s_isSearchByCustomerFileType	=	0;
+	$s_isSearchByCustomerRushSketch	=	0;
+	$s_isSearchByCustomerTimeZone	=	0;
+	$s_isSearchByCustomerFromDate	=	"";
+	$s_isSearchByCustomerToDate		=	"";
+	$s_isSearchByCustomerToState	=	"";
+	$s_isSearchByCustomerId			=	"";
+	$s_isSearchByCustomerType		=	"";
+	$s_isSearchByUnchecked			=	"";
+
+
+	if(isset($_GET['serachCustomerById']) || isset($_GET['searchName']) || isset($_GET['serachCustomerStates']) || isset($_GET['showingEmployeeOrder'])){
+		$normalSearchId 			=	MAX_SEARCH_EMPLOYEE_ORDER_ID;//Original Max ID for thses searches
+	}
+
+	if(isset($_GET['showingEmployeeOrder'])){
+         $normalSearchId 		    =	$currentLatestOrderId-5000;//Changes in searches for employee orders
+    }
+
+
+	$MAX_SEARCH_EMPLOYEE_ORDER_ID   =  $normalSearchId;
+	$MAX_SEARCH_MEMBER_ORDERID		=  MAX_SEARCH_MEMBER_ORDERID;
+
+	if(isset($_GET['increaseLimit']) && $_GET['increaseLimit'] == 1){
+
+		$MAX_SEARCH_EMPLOYEE_ORDER_ID   =  0;//$MAX_SEARCH_EMPLOYEE_ORDER_ID-100000;
+		$MAX_SEARCH_MEMBER_ORDERID		=  0;//$MAX_SEARCH_MEMBER_ORDERID-100000;
+	}
+	
+
+	$orderBy						=	"orderAddedOn DESC,orderAddedTime DESC";
+	$andClause						=	"";
+	$andClause1						=	"";
+	$andClause2						=	"";
+	$andClause3						=	"";
+	$queryString					=	"";
+	$whereClause				    =	"WHERE members_orders.orderId > ".$MAX_SEARCH_EMPLOYEE_ORDER_ID." AND members_orders.isVirtualDeleted=0 AND isTestAccount=0 AND isNotVerfidedEmailOrder=0";
+
+
+	if(isset($_GET['isSubmittedForm']) && $_GET['isSubmittedForm'] == 1)
+	{
+		$showSubmittedResult		=	true;
+		$queryString			   .=	"&isSubmittedForm=1";
+	}
+	else
+	{
+		if(isset($_SESSION['isSearchByCustomerOrderType']))
+		{
+			unset($_SESSION['isSearchByCustomerOrderType']);
+		}
+		if(isset($_SESSION['isSearchByCustomerFileType']))
+		{
+			unset($_SESSION['isSearchByCustomerFileType']);
+		}
+		if(isset($_SESSION['isSearchByCustomerRushSketch']))
+		{
+			unset($_SESSION['isSearchByCustomerRushSketch']);
+		}
+		if(isset($_SESSION['isSearchByCustomerTimeZone']))
+		{
+			unset($_SESSION['isSearchByCustomerTimeZone']);
+		}
+		if(isset($_SESSION['isSearchByCustomerFromDate']))
+		{
+			unset($_SESSION['isSearchByCustomerFromDate']);
+		}
+		if(isset($_SESSION['isSearchByCustomerToDate']))
+		{
+			unset($_SESSION['isSearchByCustomerToDate']);
+		}
+		if(isset($_SESSION['isSearchByCustomerToState']))
+		{
+			unset($_SESSION['isSearchByCustomerToState']);
+		}
+		if(isset($_SESSION['isSearchByCustomerID']))
+		{
+			unset($_SESSION['isSearchByCustomerID']);
+		}
+		if(isset($_SESSION['isSearchByCustomerType']))
+		{
+			unset($_SESSION['isSearchByCustomerType']);
+		}
+		if(isset($_SESSION['isSearchByUnchecked']))
+		{
+			unset($_SESSION['isSearchByUnchecked']);
+		}
+		if(isset($_SESSION['isSearchByTatExceed']))
+		{
+			unset($_SESSION['isSearchByTatExceed']);
+		}
+	}
+	if(isset($_GET['searchUnchecked'])  && $_GET['searchUnchecked'] == 1)
+	{
+		$andClause					.=	" AND isOrderChecked=0 AND status IN (0,1)";
+		$queryString				.=	"&searchUnchecked=1";
+		$_SESSION['isSearchByUnchecked']	=	1;
+	}
+	if(isset($_GET['searchExceedTat'])  && $_GET['searchExceedTat'] == 1)
+	{
+		$checkTimeExceed			=	CURRENT_DATE_INDIA." ".CURRENT_TIME_INDIA;
+		
+		$andClause					.=	" AND isHavingEstimatedTime=1 AND status IN (0,1) AND CONCAT(employeeWarningDate, ' ', employeeWarningTime) < '$checkTimeExceed'";
+		$queryString				.=	"&searchExceedTat=1";
+		$_SESSION['isSearchByTatExceed']	=	1;
+	}
+	
+	if(isset($_GET['searchOrderType']))
+	{
+		$searchOrderType			=	$_GET['searchOrderType'];
+		if(!empty($searchOrderType))
+		{
+			if($searchOrderType		== 1)
+			{
+				$andClause			.=	" AND members_orders.status IN(0,6)";
+				//$orderBy			 =	"orderAddedOn DESC,orderAddedTime DESC";
+				$orderBy			 =	"employeeWarningDate,employeeWarningTime";
+				$noRecordsFoundFor  .=  " AND NEW ORDERS";
+			}
+			elseif($searchOrderType	 == 2)
+			{
+				$andClause			.=	" AND members_orders.status=1";
+				//$orderBy			 =	"orderAddedOn,orderAddedTime";
+				$orderBy			 =	"employeeWarningDate,employeeWarningTime";
+				$noRecordsFoundFor  .=  " AND ACCEPTED ORDERS";
+			}
+			elseif($searchOrderType	 == 3)
+			{
+				$andClause			.=	" AND members_orders.status IN (2,4,5)";
+				$noRecordsFoundFor  .=  " AND COMPLETED ORDERS";
+			}
+			elseif($searchOrderType	== 4)
+			{
+				$andClause			.=	" AND members_orders.status IN (0,1,3,6)";
+				$orderBy			 =	"employeeWarningDate,employeeWarningTime";
+				$noRecordsFoundFor  .=  " AND INCOMPLETED ORDERS";
+			}
+			elseif($searchOrderType	== 5)
+			{
+				$andClause			.=	" AND members_orders.status=3";
+				$orderBy			 =	"orderAddedOn,orderAddedTime";
+				$noRecordsFoundFor  .=  " AND NEED ATTENTION ORDERS";
+			}
+			$_SESSION['isSearchByCustomerOrderType']	=	$searchOrderType;
+			$queryString			.=	"&searchOrderType=".$searchOrderType;
+		}
+	}
+ 
+
+	if(isset($_GET['searchRushSketch']))
+	{
+		$searchRushSketch			 =	$_GET['searchRushSketch'];
+		if($searchRushSketch		!= "-1")
+		{
+			if($searchRushSketch != 3){
+				$thirtyDaysOldDate 	     =	date('Y-m-d', strtotime("-31 Days", strtotime(CURRENT_DATE_INDIA)));
+
+				$minRushCompletedOrderId =	$employeeObj->getSingleQueryResult("SELECT orderId FROM members_orders WHERE orderAddedOn >= '$thirtyDaysOldDate' AND isDeleted=0 AND isVirtualDeleted=0 AND isNotVerfidedEmailOrder=0 order by orderId ASC LIMIT 1","orderId");
+
+				$andClause				.=	" AND isRushOrder=".$searchRushSketch; 
+				$whereClause			 =	"WHERE members_orders.orderId > ".$minRushCompletedOrderId." AND members_orders.isVirtualDeleted=0 AND isTestAccount=0 AND isNotVerfidedEmailOrder=0";
+
+				
+			}
+			else{
+				if($searchOrderType !=3){
+
+					$currentIstDateTime 	=	CURRENT_DATE_INDIA." ".CURRENT_TIME_INDIA;
+
+					$threeHrsOldTime 	=	date('Y-m-d H:i:s', strtotime("+3 Hours", strtotime($currentIstDateTime)));
+
+					if(empty($searchOrderType)){
+						$andClause				.=	" AND status in (0,1,3) AND CONCAT(employeeWarningDate, ' ', employeeWarningTime) <= '".$threeHrsOldTime."' AND  CONCAT(employeeWarningDate, ' ', employeeWarningTime) >= '".$currentIstDateTime."'";
+					}
+					else{
+						
+						$andClause				.=	" AND CONCAT(employeeWarningDate, ' ', employeeWarningTime) <= '".$threeHrsOldTime."' AND  CONCAT(employeeWarningDate, ' ', employeeWarningTime) >= '".$currentIstDateTime."'";
+					}
+					
+				}
+				
+			}	
+			$noRecordsFoundFor      .=  " AND DELIVERY ".strtoupper($a_searchRushSketch[$searchRushSketch]);			
+			$_SESSION['isSearchByCustomerRushSketch']	=	$searchRushSketch;
+			$queryString			.=	"&searchRushSketch=".$searchRushSketch;
+		}
+	}
+	
+	if(isset($_GET['searchOrder']))
+	{
+		$searchOrder		=	$_GET['searchOrder'];
+		if(!empty($searchOrder))
+		{
+			$t_searchOrder		 =	stringReplace("<=>","#",$searchOrder);
+			$t_searchOrder       =  makeDBSafe($t_searchOrder);
+			$andClause1			 =	" AND orderAddress='$t_searchOrder'";
+			$queryString		.=	"&orderAddress=".$searchOrder;
+			$noRecordsFoundFor  .=  " AND ORDER ADDRESS - ".$searchOrder;
+		}
+	}
+	if(isset($_GET['serachCustomerById']))
+	{
+		$serachCustomerById				=	$_REQUEST['serachCustomerById'];
+		if(!empty($serachCustomerById) && is_numeric($serachCustomerById))
+		{			
+			$andClause1				   .=	" AND members_orders.memberId IN ($serachCustomerById)";
+			$queryString			   .=	"&serachCustomerById=".$serachCustomerById;
+			$_SESSION['isSearchByCustomerID']	=	$serachCustomerById;
+
+			$comapos					= strpos($serachCustomerById, ",");
+			if($comapos === false && is_numeric($serachCustomerById)) {
+				$query					 =	"SELECT totalOrdersPlaced FROM members WHERE memberId=$serachCustomerById";
+				$result					 =  dbQuery($query);
+				if(mysqli_num_rows($result)){
+					$row					  =  mysqli_fetch_assoc($result);
+					$totalOrdersOfAnSingleUser=  $row['totalOrdersPlaced'];
+				}
+			}
+
+			$textRed					=	"NAME";
+			$noRecordsFoundFor		   .=   " AND CUSTOMER ID";
+			$isSearchedResultByName		=	1;
+			
+		}
+	}
+	if(isset($_GET['searchName']))
+	{
+		$searchName					 =	$_GET['searchName'];
+		if(!empty($searchName))
+		{
+			$searchName			     =	stripslashes($searchName);
+			$dbSearchName			 =	makeDBSafe($searchName);
+
+			
+			$query					 =	"SELECT totalOrdersPlaced,memberId FROM members WHERE completeName='$dbSearchName' AND isActiveCustomer=1";
+			$result					 =  dbQuery($query);
+			if(mysqli_num_rows($result)){
+				
+				$a_forSearchingIds 		  =  array();
+				while($row 	=	mysqli_fetch_assoc($result)){
+					$a_forSearchingIds[]  =   $row['memberId']; 
+				}
+				$a_forSearchingIds        =   implode(",",$a_forSearchingIds);
+
+				$andClause1				 .=	 " AND members_orders.memberId IN (".$a_forSearchingIds.") AND isActiveCustomer=1";
+			}
+			else{
+				$andClause1				 .=	 " AND completeName='$dbSearchName' AND isActiveCustomer=1";
+			}
+			$textRed				 =	"NAME";
+			$queryString			.=	"&searchName=".$searchName;
+			$noRecordsFoundFor		.=  " AND NAME ".$searchName;
+			$isSearchedResultByName	 =	1;
+		}
+	}
+	if(isset($_GET['serachCustomerStates']))
+	{
+		$serachCustomerStates		=	$_GET['serachCustomerStates'];
+		$serachCustomerStates		=	trim($serachCustomerStates);
+		if(!empty($serachCustomerStates))
+		{
+			$stateAbbre				=	getSearchStateAbbre($serachCustomerStates,$a_usaProvinces);
+			if(!empty($stateAbbre))
+			{
+				$andClause1		   .=	" AND members.state ='$stateAbbre'";
+				$queryString	   .=	"&serachCustomerStates=".$serachCustomerStates;
+				$_SESSION['isSearchByCustomerToState']	=	$stateAbbre;
+				$noRecordsFoundFor .=  " AND CUSTOMER STATE";
+			}
+		}
+	}
+
+	if(isset($_GET['increaseLimit']) && $_GET['increaseLimit'] == 1){
+		$queryString	   .=	"&increaseLimit=1";
+	}
+	
+	
+	include($form);
+	if(isset($_GET['orderOf']) && isset($_GET['showingEmployeeOrder']))
+	{
+		$displayingOrderOfEmployee	=	$_GET['orderOf'];
+		$showingEmployeeOrder		=	$_GET['showingEmployeeOrder'];
+		if(!empty($displayingOrderOfEmployee) && is_numeric($displayingOrderOfEmployee) && !empty($showingEmployeeOrder))
+		{
+			if($s_hasManagerAccess == 1 || $displayingOrderOfEmployee == $s_employeeId)
+			{
+				$andClause3       =	" AND members_orders.acceptedBy=".$displayingOrderOfEmployee;
+				$queryString	  = "&isSubmittedForm=1&orderOf=".$displayingOrderOfEmployee."&showingEmployeeOrder=".$showingEmployeeOrder;
+				if(isset($_GET['PAD']) && $_GET['PAD'] == 1)
+				{
+					$andClause3       .= " AND isDonePostAudit=1";
+					$queryString	  .= "&PAD=1";
+				}
+			
+				if(isset($_GET['displayTypeCompleted']) && $_GET['displayTypeCompleted'] == 1)
+				{
+					//$table			=	"members_orders INNER JOIN members ON members_orders.memberId=members.memberId INNER JOIN members_orders_reply ON members_orders.orderId=members_orders_reply.orderId";	
+					$andClause3			=	" AND members_orders_reply.qaDoneBy=".$displayingOrderOfEmployee;
+					$queryString		= "&isSubmittedForm=1&orderOf=".$displayingOrderOfEmployee."&showingEmployeeOrder=".$showingEmployeeOrder."&displayTypeCompleted=1";
+				}
+			}
+		}
+	}
+	
+	$headingTextOfPage				=	"VIEW ALL ORDERS FOR YOU";
+	$OlinkClass						=	"link_style6";
+	$OlinkClass1					=	"link_style6";
+	if(isset($_GET['Olink']) && $_GET['Olink'] != 0)
+	{
+		$Olink						=	$_GET['Olink'];
+		if($Olink					==	1)
+		{
+			$OlinkClass			    =	"link_style24";
+			$headingTextOfPage=	"VIEW MY ALL ORDERS";
+		}
+		if($Olink				    ==	2)
+		{
+			$OlinkClass1			=	"link_style24";
+			$headingTextOfPage		=	"VIEW MY ALL QA ORDERS";
+		}
+	}
+?>
+<script type="text/javascript" src="<?php echo SITE_URL;?>/script/wz_tooltip.js"></script>
+<script type="text/javascript" src="<?php echo SITE_URL;?>/script/common-ajax.js"></script>
+<script type="text/javascript">
+	function openEditWidow(customerId,type)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/show-pdf-customers-employees.php?ID="+customerId+"&type="+type;
+		prop = "toolbar=no,scrollbars=yes,width=650,height=220,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	function serachRedirectFileType(addUrl)
+	{
+		window.location.href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php"+addUrl;
+	}
+	function serachOrderTypeFileType(backLink)
+	{
+		window.location.href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php"+backLink;
+	}
+	function addCustomerSessionID(customerId,orderId)
+	{
+		window.location.href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php?isSubmittedForm=1&customerId="+customerId+"&orderId="+orderId+"&isSelectCustomer=1";
+	}
+	function acceptOrderWindow(orderId,customerId)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/accept-orders-behalf-employee.php?orderId="+orderId+"&customerId="+customerId;
+		prop = "toolbar=no,scrollbars=yes,width=1200,height=650,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	function reAssignOrderWindow(orderId,customerId)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/re-assign-accepted-orders.php?orderId="+orderId+"&customerId="+customerId;
+		prop = "toolbar=no,scrollbars=yes,width=1200,height=650,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	function viewCustomerEmployeeMessages(orderId,customerId)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/view-order-all-messages.php?orderId="+orderId+"&customerId="+customerId;
+		prop = "toolbar=no,scrollbars=yes,width=800,height=650,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	function markedPostAuditErrorFiles(orderId,customerId)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/post-audit-errors.php?orderId="+orderId+"&customerId="+customerId;
+		prop = "toolbar=no,scrollbars=yes,width=800,height=700,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	function messageFileNotChecked(customerId,orderId)
+	{
+		alert("Files must be checked first before you accept or assign this order.");
+		
+		window.location.href="<?php echo SITE_URL_EMPLOYEES;?>/view-order-others.php?orderId="+orderId+"&customerId="+customerId;
+		
+	}
+
+	function acceptMaximumOrder()
+	{
+		alert("Please complete previous accepted orders first to accept a new order.");
+		return false;
+	}
+
+	function acceptOldOrders(orderId,customerId)
+	{
+		/*path = "<?php echo SITE_URL_EMPLOYEES?>/accept-not-tat-orders.php?orderId="+orderId+"&customerId="+customerId;
+		prop = "toolbar=no,scrollbars=yes,width=800,height=700,top=100,left=100";
+		window.open(path,'',prop);*/
+
+		alert("Please accept orders according to the tat or ask manager to assign.");
+		return false;
+	}
+	function viewOrderDoneEmployeeList(memberId)
+	{
+		path = "<?php echo SITE_URL_EMPLOYEES?>/view-customers-total-order-by-employee.php?memberId="+memberId;
+		prop = "toolbar=no,scrollbars=yes,width=600,height=450,top=100,left=100";
+		window.open(path,'',prop);
+	}
+	<!--
+spe=500;
+na=document.all.tags("blink");
+swi=1;
+bringBackBlinky();
+function bringBackBlinky() {
+if (swi == 1) {
+sho="visible";
+swi=0;
+}
+else {
+sho="hidden";
+swi=1;
+}
+for(i=0;i<na.length;i++) {
+na[i].style.visibility=sho;
+}
+setTimeout("bringBackBlinky()", spe);
+}
+-->
+</script>
+<?php
+		//****** PLEASE COOMENT THIS BLOCK IF STILL FIND SOMETHING BUG ON QUERY EXECUTION***//
+
+	
+	$displayMarqueMessageDateTime				=	 timeBetweenBeforeMinutes($nowDateIndia,$nowTimeIndia,30);
+	list($searchMessageDate,$searchMessageTime)	=	explode("=",$displayMarqueMessageDateTime);
+
+	
+
+	if($a_marqueeCustomers =	$orderObj->getCustomersMostRecentMessages($searchMessageDate,$searchMessageTime,$MAX_SEARCH_EMPLOYEE_ORDER_ID))
+	{
+
+		$a_marqueeCustomers	=	implode(", ",$a_marqueeCustomers);
+	?>
+	<table width='99%' align='center' cellpadding='2' cellspacing='2' border='0'>
+		<tr>
+			<td width="16%" class="heading3" valign="top">New Messages From :</td>
+			<td class="text1" valign="top">
+				<?php echo $a_marqueeCustomers;?>
+			</td>
+		</tr>
+	</table>
+	<?php
+	}
+
+		//********************* COMMENT TILL HERE *********************************//
+	?>
+	<table width="99%" align="center" border="0" cellpadding="0" cellspacing="0">
+		 <tr>
+			<td align="left">
+				<a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $s_employeeId;?>&showingEmployeeOrder=1&Olink=1')" class='<?php echo $OlinkClass;?>' style="cursor:pointer;" title='View all of your processed orders'>ALL MY ORDERS </a> 
+				|
+				<a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $s_employeeId;?>&showingEmployeeOrder=1&displayTypeCompleted=1&Olink=2')" class='<?php echo $OlinkClass1;?>' style="cursor:pointer;" title='View all of your QA orders'>ALL MY QA ORDERS </a>
+			<?php
+				if(!empty($allTotalCustomersNewOrders) && !empty($s_hasManagerAccess))
+				{
+					//$assignNewUrl	 =	SITE_URL_EMPLOYEES."/assign-customer-orders.php";
+					$assignNewUrl	 =	SITE_URL_EMPLOYEES."/assign-all-new-orders.php";
+					
+			?>
+				|
+				<a href="<?php echo $assignNewUrl;?>" class='link_style6' style="cursor:pointer;">ASSIGN ALL NEW ORDERS - <?php echo $allTotalCustomersNewOrders;?></a>
+			<?php
+				}
+				if(!empty($totalUnrepliedOrdersMsg))
+				{
+				?>
+				| 
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/pdf-customer-messages.php?unrepliedMsg=1#second" class='link_style6' style="cursor:pointer;">UNREPLIED MESSAGES - <?php echo $totalUnrepliedOrdersMsg;?></a>
+			<?php
+				}
+				if(!empty($totalUnrepliedRatingMsg))
+				{
+				?>
+				| 
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/pdf-customer-messages.php?unrepliedRatingMsg=1#third" class='link_style6' style="cursor:pointer;">UNREPLIED RATINGS - <?php echo $totalUnrepliedRatingMsg;?></a> 
+			<?php
+				}
+				if(!empty($totalUnrepliedGeneralMsg))
+				{
+				?>
+				|
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/pdf-customer-messages.php?unrepliedGeneralMsg=1#fifth" class='link_style6' style="cursor:pointer;">GENERAL MESSAGES - <?php echo $totalUnrepliedGeneralMsg;?></a>
+			<?php
+				}
+				if(!empty($totalExceedTatOrders))
+				{
+			?>
+				|
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php?isSubmittedForm=1&searchExceedTat=1" class='link_style6' style="cursor:pointer;">EXCEEDED TAT - <?php echo $totalExceedTatOrders;?></a>
+			<?php
+				}
+				if(!empty($totalUncheckedOrders))
+				{
+			?>
+				|
+				<a href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php?isSubmittedForm=1&searchUnchecked=1" class='link_style6' style="cursor:pointer;">UNCHECKED ORDERS - <?php echo $totalUncheckedOrders;?></a>
+			<?php
+				}
+			?>
+			&nbsp;</td>
+		</tr>
+		<tr>
+			<td height="5"></td>
+		</tr>
+	</table>
+	<?php
+	//die("KASE1");
+	if($showSubmittedResult		  ==	true)
+	{
+
+		$start					  =	0;
+		$recsPerPage	          =	$showPageOrders;	//	how many records per page
+		$showPages		          =	10;	
+		$pagingObj->recordNo	  =	$recNo;
+		$pagingObj->startRow	  = $recNo;
+		$pagingObj->whereClause   =	$whereClause.$andClause.$andClause1.$andClause2.$andClause3;
+		$pagingObj->recsPerPage   =	$recsPerPage;
+		$pagingObj->showPages	  =	$showPages;
+		$pagingObj->orderBy		  =	$orderBy;
+		$pagingObj->table		  =	$table;
+		$pagingObj->selectColumns = "members_orders.memberId,members_orders.orderId,orderAddress,orderType,providedSketch,sketchStatus,isOrderChecked,isHavingInternalMsg,completedTime,qaDoneByName,qaDoneById,acceeptedByName,hasRepliedUploaded,isOrderNeedAttention,orderCheckedBy,firstName,lastName,completeName,members.averageTimeTaken,appraisalSoftwareType,totalOrdersPlaced,state,isVocalCustomer,orderAddedOn,orderAddedTime,status,members_orders.orderCompletedOn,members_orders.assignToEmployee,members_orders.assignToTime,isAddedTatTiming,isCompletedOnTime,orderCompletedTat,beforeAfterTimingMin,acceptedBy,rateGiven,memberRateMsg,isRushOrder,isHavingEstimatedTime,employeeWarningDate,employeeWarningTime,isHavingOrderNewMessage,isRateCountingEmployeeSide,isViewedDownloadOrder,viewedDate,viewedTime,appraisalSoftwareType,numberOfCompsFilled";
+		$pagingObj->path		  = SITE_URL_EMPLOYEES."/new-pdf-work.php";
+		$totalRecords = $pagingObj->getTotalRecords();
+		if($totalRecords && $recNo <= $totalRecords)
+		{
+			//********************AUTO REDIRECT IF FINDS SINGLE CUSTOMER MORE ORDER THAN GETTING NOW****//
+			if(!isset($_GET['increaseLimit']) && $isSearchedResultByName == 1 && $totalRecords < $totalOrdersOfAnSingleUser){
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES."/new-pdf-work.php?increaseLimit=1".$queryString);
+		        exit();
+			}
+			//******************** AUTO REDIRECT IF FINDS SINGLE ORDER TO THE ORDER PAGE ******//
+			if($totalRecords		==	1)
+			{
+				$redQuery			=	"SELECT members_orders.memberId,members_orders.orderId FROM ".$table." ".$whereClause.$andClause.$andClause1.$andClause2.$andClause3;
+				$redResult			=	dbQuery($redQuery);
+				if(mysqli_num_rows($redResult))
+				{
+					$redRow			=	mysqli_fetch_assoc($redResult);
+					$redOrderId		=	$redRow['orderId'];
+					$redMemberId	=	$redRow['memberId'];
+
+					ob_clean();
+					header("Location: ".SITE_URL_EMPLOYEES."/view-order-others.php?orderId=$redOrderId&customerId=$redMemberId");
+					exit();
+				}
+			}
+
+			//////////////////////////// GET ALL ORDERS CHECK BY IDS /////////////////////////////////
+			$all_checkedOrder_employees = array();
+			if(!empty($MAX_SEARCH_EMPLOYEE_ORDER_ID)){
+				$queryChecked 				= "SELECT checkedBy,checked_customer_orders.orderId FROM checked_customer_orders INNER JOIN members_orders ON checked_customer_orders.orderId=members_orders.orderId WHERE members_orders.orderId > ".$MAX_SEARCH_EMPLOYEE_ORDER_ID." AND members_orders.isVirtualDeleted=0 AND isNotVerfidedEmailOrder=0 AND members_orders.memberId NOT IN (1680,2063,2059) ORDER BY orderAddedOn DESC,orderAddedTime DESC limit ".$recNo.",".$showPageOrders;
+				$queryCheckedResult      	=	dbQuery($queryChecked);
+				if(mysqli_num_rows($queryCheckedResult))
+				{
+					while($rowChecked	=	mysqli_fetch_assoc($queryCheckedResult))
+					{
+						$checkedById    =	$rowChecked['checkedBy'];
+						$checkedOrderId =	$rowChecked['orderId'];
+
+						$all_checkedOrder_employees[$checkedOrderId]  = $checkedById;
+					}
+				}
+			}
+			//////////////////////////////////////////////////////////////////////////////////////////
+			
+			
+			$pagingObj->setPageNo();
+			$recordSet = $pagingObj->getRecords();
+			$i	=	$recNo;
+
+			$border	=	"0";
+			if($s_employeeId == 3)
+			{
+				$border	=	"0";
+			}
+	
+	?>
+	<script type="text/javascript" src="<?php echo SITE_URL;?>/script/common-functions.js"></script>
+	<table width="99%" align="center" border="<?php echo $border;?>" cellpadding="0" cellspacing="0">
+		<tr>
+			<td colspan="13" height="5"></td>
+		</tr>
+		<tr bgcolor="#373737" height="20">
+	
+			<td class="smalltext8" width="183">&nbsp;<b>Customer Name</b></td>
+			<td class="smalltext8" width="278">&nbsp;<b>Order Address</b></td>
+			<td class="smalltext8" width="125"><b>Type</b></td>
+			<td class="smalltext8" width="80"><b>File/Sketch</b></td>
+			<td class="smalltext8" width="70"><b>Order On</b></td>
+			<td class="smalltext8" width="65"><b>TAT</b></td>
+			<td class="smalltext8" width="66"><b>Status</b></td>
+			<td class="smalltext8" width="81"><b>Checked By</b></td>
+			<td class="smalltext8" width="85"><b>Accepted By</b></td>
+			<td class="smalltext8" width="85"><b>Qa By</b></td>
+			<td class="smalltext8" width="55"><b>Rating</b></td>
+			<td class="smalltext8" width="47" ><b>Comps</b>&nbsp;</td>
+			<td class="smalltext8"><b>Client Viewed</b>&nbsp;</td>
+		</tr>
+		<?php
+			while($row					=   mysqli_fetch_assoc($recordSet))
+			{	
+
+				$i++;	
+				$customerId				=	$row['memberId'];
+				
+				$firstName				=	stripslashes($row['firstName']);
+				$firstName				=	stringReplace("'","",$firstName);
+				$firstName				=	stringReplace('"',"",$firstName);
+				$lastName				=	stripslashes($row['lastName']);
+				$lastName				=	stringReplace("'","",$lastName);
+				$lastName				=	stringReplace('"',"",$lastName);
+				$completeName			=	$firstName." ".substr($lastName, 0, 1);
+
+				$orderId				=	$row['orderId'];
+				$orderAddress			=	stripslashes($row['orderAddress']);
+				$orderAddress			=	getSubstring($orderAddress,55);
+				$orderType				=	$row['orderType'];
+				$orderTypeText			=	$a_customerOrder[$orderType];
+				$appraisalSoftwareType	=	$row['appraisalSoftwareType'];
+				$appraisalText			=	$a_allAppraisalFileTypes[$appraisalSoftwareType];
+				
+				$providedSketch			=	$row['providedSketch'];
+				$sketchStatus			=	$row['sketchStatus'];
+				$isOrderChecked			=	$row['isOrderChecked'];
+
+				$isHavingInternalMsg	=	$row['isHavingInternalMsg'];
+				$completedTime			=	$row['completedTime'];
+				$qaDoneByName			=	stripslashes($row['qaDoneByName']);
+				$qaDoneBy				=	$row['qaDoneById'];
+				$acceptedByName			=	stripslashes($row['acceeptedByName']);
+				$hasRepliedUploaded		=	$row['hasRepliedUploaded'];
+				$isOrderNeedAttention	=	$row['isOrderNeedAttention'];
+				$orderCheckedBy			=	stripslashes($row['orderCheckedBy']);
+				$state 					=	$row['state'];
+				$averageTimeTaken 		=	$row['averageTimeTaken'];
+
+				$assignToEmployee 		=	$row['assignToEmployee'];
+				$assignToTime 		    =	$row['assignToTime'];
+
+
+				
+				$orderAddedOn			=	$row['orderAddedOn'];
+				$displayDate			=	showDateMonth($orderAddedOn);
+				$orderAddedTime			=	$row['orderAddedTime'];
+				$displayTime			=	showTimeFormat($orderAddedTime);
+				$status					=	$row['status'];
+				$orderCompletedOn		=	$row['orderCompletedOn'];
+				$isAddedTatTiming		=	$row['isAddedTatTiming'];
+				$isCompletedOnTime		=	$row['isCompletedOnTime'];
+				$orderCompletedTat		=	$row['orderCompletedTat'];
+				$beforeAfterTimingMin	=	$row['beforeAfterTimingMin'];
+				$acceptedBy				=	$row['acceptedBy'];
+				$rateGiven				=	$row['rateGiven'];
+				$memberRateMsg			=	stripslashes($row['memberRateMsg']);
+				$isRushOrder			=	$row['isRushOrder'];
+				$isHavingEstimatedTime	=	$row['isHavingEstimatedTime'];
+				$employeeWarningDate	=	$row['employeeWarningDate'];
+				$employeeWarningTime	=	$row['employeeWarningTime'];
+				$isHavingOrderNewMessage=	$row['isHavingOrderNewMessage'];
+				$isRateCountingEmployeeSide	=	$row['isRateCountingEmployeeSide'];
+				$totalCustomerOrders	=	$row['totalOrdersPlaced'];		
+
+				$isCustomerViewedTheOrder=	$row['isViewedDownloadOrder'];
+				$viewedDate				=	showDateMonth($row['viewedDate']);
+				$viewedTime				=	showTimeFormat($row['viewedTime']);
+				$noOfCompletedComps	    =	$row['numberOfCompsFilled'];
+				$customerLinkStyle		=	"link_style16";
+
+
+
+				if(empty($totalCustomerOrders))
+				{
+					$totalCustomerOrders=	0;
+				}
+				if($totalCustomerOrders <= 3)
+				{
+					$customerLinkStyle	=	"link_style17";
+				}
+				elseif($totalCustomerOrders > 3 && $totalCustomerOrders <= 7)
+				{
+					$customerLinkStyle	=	"link_style18";
+				}
+				elseif($totalCustomerOrders >= 100 && $totalCustomerOrders < 350)
+				{
+					$customerLinkStyle	=	"link_style20";
+				}
+				elseif($totalCustomerOrders >= 350 && $totalCustomerOrders < 700)
+				{
+					$customerLinkStyle	=	"link_style21";
+				}
+				elseif($totalCustomerOrders >= 700)
+				{
+					$customerLinkStyle	=	"link_style22";
+				}
+
+				$timeZoneColor		=	"#333333";
+				if(array_key_exists($state,$a_usaProvinces))
+				{
+					$timeZone		=	$a_usaProvinces[$state];
+
+					list($stateName,$zone)	=	explode("|",$timeZone);
+					if(array_key_exists($zone,$a_timeZoneColor))
+					{
+						$timeZoneColor		=	$a_timeZoneColor[$zone];
+					}
+					else
+					{
+						$timeZoneColor		=	$a_timeZoneColor[$zone];
+					}
+				}
+				else
+				{
+					$timeZoneColor		=	$a_timeZoneColor[$zone];
+				}
+
+		
+				$vocalText				=	"";
+			
+				if(!empty($isCustomerViewedTheOrder))
+				{
+					$pickAt				=	$viewedDate.", ".$viewedTime;
+				}
+				else{
+					$pickAt				=	"";
+				}
+
+				$expctDelvText			    =	"";
+				$orderAcceptedDateTime      =   "";
+				
+				
+
+				$hasReplied						=	$hasRepliedUploaded;
+				
+				$statusText						=   "<font color='red'>New Order</font>";
+				$qaDoneByText					=	"";
+				if($isOrderChecked				==	1)
+				{
+					$statusText					=   "<font color='green'>New Order</font>";
+				}
+
+				$newAttentionUnmarkTxt			=	"";
+
+				$orderCheckByName				=	"<font color='#ff0000;'>Not Checked</font>";
+				$orderCheckedById 				=	0;
+				if(!empty($isOrderChecked))
+				{
+					$orderCheckByName			=	$orderCheckedBy;
+					if(!empty($all_checkedOrder_employees) && count($all_checkedOrder_employees) > 0 && array_key_exists($orderId,$all_checkedOrder_employees)){
+						$orderCheckedById       =  $all_checkedOrder_employees[$orderId];
+					}
+					else{
+						$orderCheckedById       =   $employeeObj->getSingleQueryResult("SELECT checkedBy FROM checked_customer_orders WHERE orderId=$orderId","checkedBy");
+					}					
+				}
+
+				if($status						==	1)
+				{
+					$statusText					=   "<font color='#4F0000'>Accepted</font>";
+					if(!empty($hasRepliedUploaded))
+					{
+						$statusText				=	"<font color='blue'>QA Pending</font>";
+					}
+					
+				}
+			
+
+				if($status	==	2 || $status == 5 || $status == 6)
+				{
+					$qaDoneByText	       =	$qaDoneByName;
+					$orderCompletedTime	   =    $completedTime;					
+					if(empty($noOfCompletedComps))
+					{
+						$noOfCompletedComps= "N/A";
+					}
+				}
+			
+				if($status				==	2)
+				{
+
+					$orderCompletedDateTime = showDateMonth($orderCompletedOn).",".showTimeFormat($completedTime);
+					$statusText			=   "<font color='green' font-size='8px';>Completed<br />(".$orderCompletedDateTime.")</font>";
+					
+				}
+				elseif($status			==	3)
+				{	
+					$statusText			=   "<font color='#333333'>Nd Atten.</font>";
+				}
+				elseif($status			==	5)
+				{
+					$statusText			=   "<font color='green'>Nd Feedbk.</font>";///.$postAuditText;
+				}
+
+				elseif($status			==	4)
+				{
+					$statusText			=   "<font color='#ff0000'>Cancelled</font>";
+				}
+				elseif($status			==	6)
+				{
+					$statusText			=   "<font color='green'>Fd Rcvd</font>";//.$postAuditText;
+				}
+
+				if(!empty($isHavingInternalMsg))
+				{
+					$showEmployeeInternalMessageText=	"<br><a href='".SITE_URL_EMPLOYEES."/internal-emp-msg.php?orderId=$orderId&customerId=$customerId#sendMessages' class='link_style15'>(View internal msg)</a>";
+				}
+				else
+				{
+					$showEmployeeInternalMessageText=	"";
+				}
+								
+				$hasMarkedSketchYes		=	"NO";
+				if($providedSketch		==	1)
+				{
+				   $hasMarkedSketchYes	=	"YES";
+				   if($sketchStatus		==	1)
+				   {
+						$hasMarkedSketchYes	=	"ACK";
+				   }
+				   elseif($sketchStatus	==	2)
+				   {
+						$hasMarkedSketchYes	=	"DONE";
+				   }
+				}
+				$appraisalText			=	$appraisalText."/".$hasMarkedSketchYes;
+
+				if(!empty($isHavingOrderNewMessage))
+				{
+					$showCustomerLatestMessages	=	"<br>(<a onclick='viewCustomerEmployeeMessages($orderId,$customerId)' class='link_style17' style='cursor:pointer;'>Customer Message</a>)";
+				}
+				else
+				{
+					$showCustomerLatestMessages	=	"";
+				}
+				
+
+
+				
+				if($status						==	0)
+				{
+					if($isOrderNeedAttention	==	1)
+					{
+						$newAttentionUnmarkTxt	=	"<font color='#ff0000'>(Atten)</font>";
+					}
+				}
+
+				if(!empty($rateGiven))
+				{
+					if(!empty($memberRateMsg))
+					{
+						$tipText1		=	$memberRateMsg;
+						$tipText1		=	stringReplace('"',"",$tipText1);
+						$tipText1		=	stringReplace("'","",$tipText1);
+					}
+					else
+					{
+						$tipText1		=	"";
+					}
+				}
+				if($isRushOrder		    ==	1)
+				{
+				   $isRushOrderFont	    =	"<font color='#ff0000'><b>*</b></font>";
+				}
+				else
+				{
+					$isRushOrderFont	=	"";
+				}
+								
+				
+				if(in_array($customerId,$a_unrepliedGeneralMsg))
+				{
+					$showCustomerOwnGeneralMsg	  =	"<br>(<a href='".SITE_URL_EMPLOYEES."/pdf-customer-messages.php?showingForMember=".$completeName."&unrepliedGeneralMsg=1#fifth' class='link_style17' style='cursor:pointer;'>Customer General Message</a>)";
+				}
+				else
+				{
+					$showCustomerOwnGeneralMsg		=	"";
+				}
+
+				
+				
+				$bgColor					=	"class='rwcolor1'";
+				if($i%2==0)
+				{
+					$bgColor				=   "class='rwcolor2'";
+				}
+
+
+				$displayEstimatedLeft		=	0;
+				if($status <= 1)
+				{					
+					if($isHavingEstimatedTime==	1 && empty($isAddedTatTiming))
+					{
+						$expctDelvText		 =	orderTAT2($employeeWarningDate,$employeeWarningTime);
+					}
+				}
+				elseif($status == 2 || $status == 5 || $status == 6)
+				{
+					
+					if($orderCompletedOn != "0000-00-00" && $orderCompletedTime != "" && $orderCompletedTime != "00:00:00" && empty($isAddedTatTiming))
+					{
+						$completedMin		=	timeBetweenTwoTimes($orderAddedOn,$orderAddedTime,$orderCompletedOn,$orderCompletedTime);
+
+						$completedMin		 =	getHours($completedMin);
+
+						$expctDelvText		 =	$completedMin." Hrs Taken";
+						$displayEstimatedLeft=	2;
+					}
+				}	
+				
+				
+	?>
+
+					<tr height="23" <?php echo $bgColor;?>>
+						<td class="<?php echo $customerLinkStyle;?>" valign="top">
+							<?php 
+								echo "<font color='#000000'>".$i.")</font><a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&serachCustomerById=$customerId' class='$customerLinkStyle' style='cursor:pointer;'>$completeName".$vocalText."</a>(".$averageTimeTaken.")";
+
+								
+									echo "(<a onclick='viewOrderDoneEmployeeList($customerId)' style='cursor:pointer;' class='link_style12' title='Star'>S</a>)";
+								
+							?>
+						</td>
+						<td class="smalltext17" valign="top">
+							<?php 
+								if(empty($isSearchedMemberPdfOrder))
+								{
+									echo $isRushOrderFont."<a href='".SITE_URL_EMPLOYEES."/view-order-others.php?orderId=$orderId&customerId=$customerId' class='link_style12'>$orderAddress</a>&nbsp;($state)";
+								}
+								else
+								{
+									echo $isRushOrderFont."<a onclick='addCustomerSessionID($customerId,$orderId)' class='link_style12' style='cursor:pointer;'>$orderAddress</a>&nbsp;($state)";
+								}
+								echo $showCustomerLatestMessages.$showCustomerOwnGeneralMsg.$newAttentionUnmarkTxt.$showEmployeeInternalMessageText;
+							?>
+						</td>
+						<td class="smalltext17" valign="top"><?php echo $orderTypeText;?></td>
+						<td class="smalltext17" valign="top"><?php echo $appraisalText;?></td>
+						<td class="smalltext17" valign="top"><font color="<?php echo $timeZoneColor;?>"><?php echo $displayDate.",".$displayTime;?></font></td>
+						<td class="smalltext17" valign="top">
+							<?php
+								if($isAddedTatTiming		==	1)
+								{
+									$expctDelvText			=	getHours($orderCompletedTat);
+									$onTimeText				=	"<b>Ontime</b>";
+									if($isCompletedOnTime	==	2)
+									{
+										$onTimeText			=	"<font color='#ff0000;'><b>Late <b></font>(".getHours($beforeAfterTimingMin).")";
+									}
+									echo $expctDelvText." ".$onTimeText;
+								}
+								else
+								{
+									echo $expctDelvText;
+								}
+							?>
+						</td>
+						<td colspan="3" id="change<?php echo $orderId;?>" valign="top">
+							<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">
+								<tr>
+								<td class="smalltext17" valign="top" width="30%"><?php echo $statusText;?></td>
+								<td class="smalltext17" valign="top" width="33%">
+									<?php 
+									  if(in_array($orderCheckedBy,$a_allDeactivatedEmployees) && array_key_exists($orderCheckedById,$a_allDeactivatedEmployees)){
+									  	 $orderCheckByName = "Hemant Jindal";
+									  }
+										echo $orderCheckByName;
+									?>
+								</td>							
+								<td class="smalltext17" valign="top">
+									 <?php 
+										if(!empty($acceptedByName))
+										{
+
+											$orderAccptedDateTime = showDateMonth($assignToEmployee).",".showTimeFormat($assignToTime);
+											$orderOf 		   =  $acceptedBy;
+											if(!empty($a_allDeactivatedEmployees) && array_key_exists($acceptedBy,$a_allDeactivatedEmployees)){
+												$acceptedByName=  "Hemant Jindal";
+												$orderOf       =  137;
+											}
+											if(!empty($s_hasManagerAccess))
+											{
+										?>
+											  <a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $acceptedBy;?>&showingEmployeeOrder=1')" class='link_style12' style="cursor:pointer;" title='View orders of <?php echo $acceptedByName;?>'><?php echo $acceptedByName;?></a><br /><font class='smalltext11'>(<?php echo $orderAccptedDateTime;?>)</font>
+										<?php
+												if($hasReplied	==	0 && $status == 1)
+												{
+										?>
+											(<a onclick="reAssignOrderWindow(<?php echo $orderId;?>,<?php echo $customerId;?>)" class="link_style12" style='cursor:pointer;' title='Re-Assign'>RE-ASSIGN</a>)
+										<?php
+												}
+											}
+											elseif(empty($s_hasManagerAccess) && $s_employeeId == $acceptedBy)
+											{
+										?>
+											  <a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $acceptedBy;?>&showingEmployeeOrder=1')" class='link_style12' style="cursor:pointer;" title='View orders of <?php echo $acceptedByName;?>'><?php echo $acceptedByName;?></a><br /><font class='smalltext11'>(<?php echo $orderAccptedDateTime;?>)</font>
+										<?php	
+											}
+											else
+											{
+												echo $acceptedByName."<br /><font class='smalltext11'>(".$orderAccptedDateTime.")</font>";
+											}
+										}
+										elseif($status	==	0)
+										{
+											$acceptUrl	=	SITE_URL_EMPLOYEES."/accept-orders-ajax.php?srNo=".$i."&orderId=";
+											if($isOrderChecked	==	1)
+											{
+												if($s_hasManagerAccess)
+												{
+											?>
+											<a onclick="acceptOrderWindow(<?php echo $orderId;?>,<?php echo $customerId;?>)" class="greenLink" style='cursor:pointer;' title='Assign'>ASSIGN</a>
+											<?php
+												}
+												else
+												{
+													if(!empty($totalUnReplied) && !empty($maximumOrdersAccept))
+													{
+														if($totalUnReplied < $maximumOrdersAccept)
+														{
+															if(isset($totalAvailabaleOrdersToProces) && !empty($totalAvailabaleOrdersToProces))
+															{
+																echo "<a onclick='acceptMaximumOrder()' class='greenLink' style='cursor:pointer' title='Accept It'>ACCEPT</a>&nbsp; |&nbsp;";
+															}
+															else{
+																if(!empty($a_fisrtThirtyOrdersList) && count($a_fisrtThirtyOrdersList) > 0 && in_array($orderId,$a_fisrtThirtyOrdersList)){
+																	
+															?>
+																	<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+																<?php
+																}
+																else{
+																	if(in_array($customerId,$a_bypassTatExplnation)){
+																	?>
+																	<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+																<?php
+																	}
+																	else{
+																		if($thirtyOrdersEmployee == 1){
+																			echo "<a onclick='acceptOldOrders($orderId,$customerId)' class='greenLink' style='cursor:pointer' title='Accept It'>ACCEPT</a>&nbsp; |&nbsp;";
+																		}
+																		else{
+																	?>
+																	<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+																	<?php
+																		}
+																	}
+																	
+																}
+															}
+
+														}
+														else{
+															echo "<a onclick='acceptMaximumOrder()' class='greenLink' style='cursor:pointer' title='Accept It'>ACCEPT</a>&nbsp; |&nbsp;";
+														}
+													}
+													else{
+
+													if(isset($totalAvailabaleOrdersToProces) && !empty($totalAvailabaleOrdersToProces))
+													{
+														echo "<a onclick='acceptMaximumOrder()' class='greenLink' style='cursor:pointer' title='Accept It'>ACCEPT</a>&nbsp; |&nbsp;";
+													}
+													else{
+
+														if(!empty($a_fisrtThirtyOrdersList) && count($a_fisrtThirtyOrdersList) > 0 && in_array($orderId,$a_fisrtThirtyOrdersList)){
+												?>
+														<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+												<?php
+														}
+														else{
+															if(in_array($customerId,$a_bypassTatExplnation)){
+														?>
+																	<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+														<?php
+															}
+															else{
+																if($thirtyOrdersEmployee == 1){
+																		echo "<a onclick='acceptOldOrders($orderId,$customerId)' class='greenLink' style='cursor:pointer' title='Accept It'>ACCEPT</a>&nbsp; |&nbsp;";
+																	}
+																	else{
+															?>
+															<a onclick="commonFunc1('<?php echo $acceptUrl;?>','change<?php echo $orderId;?>','Are you sure to accept this order of <?php echo $firstName;?>?',<?php echo $orderId?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a> 
+															<?php
+																}
+															}
+															
+														}
+													}
+												}
+											  }
+											}
+											else
+											{
+												if($s_hasManagerAccess)
+												{
+										?>
+													<a onclick="messageFileNotChecked(<?php echo $customerId;?>,<?php echo $orderId;?>)" class="greenLink" style='cursor:pointer;' title='Assign'>ASSIGN</a>
+										<?php
+												}
+												else
+												{
+										?>
+													<a onclick="messageFileNotChecked(<?php echo $customerId;?>,<?php echo $orderId;?>)" class="greenLink" style='cursor:pointer;' title='Accept It'>ACCEPT</a>
+										<?php
+												}
+											}
+										  
+										}
+									?>
+								</td>
+							</tr></table>
+						</td>
+						<td class="smalltext16" valign="top">
+							<?php
+								if(!empty($a_allDeactivatedEmployees) && array_key_exists($qaDoneBy,$a_allDeactivatedEmployees)){
+									$qaDoneByText=  "Hemant Jindal";
+									$qaDoneBy    =  137;
+								}
+
+								if(!empty($s_hasManagerAccess) && !empty($qaDoneByText))
+								{
+							?>
+								  <a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $qaDoneBy;?>&showingEmployeeOrder=1&displayTypeCompleted=1')" class='link_style12' style="cursor:pointer;" title='View orders of <?php echo $qaDoneByText;?>'><?php echo $qaDoneByText;?></a>
+							<?php
+								}
+								elseif(empty($s_hasManagerAccess) && !empty($qaDoneByText) && $s_employeeId == $qaDoneBy)
+								{
+							?>
+								   <a onclick="serachRedirectFileType('?isSubmittedForm=1&orderOf=<?php echo $qaDoneBy;?>&showingEmployeeOrder=1&displayTypeCompleted=1')" class='link_style12' style="cursor:pointer;" title='View orders of <?php echo $qaDoneByText;?>'><?php echo $qaDoneByText;?></a>
+							<?php	
+								}
+								else
+								{
+									echo $qaDoneByText;
+								}
+							?>
+						</td>
+						<td class="smalltext16" valign="top">
+							<?php
+								if(!empty($rateGiven) && $isRateCountingEmployeeSide == 'yes')
+								{
+							?>
+							<img src="<?php echo SITE_URL;?>/images/rating/<?php echo $rateGiven;?>.png"  onmouseover="Tip('<?php echo $tipText1;?>')" onmouseout="UnTip()">
+							<?php
+								}	
+								else
+								{
+									echo "&nbsp;";
+								}
+							?>
+						</td>
+						<td class="smalltext16" valign="top"><?php echo $noOfCompletedComps;?>&nbsp;</td>
+						<td class="smalltext17" valign="top"><?php echo $pickAt;?>&nbsp;</td>
+					</tr>
+	<?php			
+		}
+		echo "<tr><td height='7'></td></tr><tr><td align='right' colspan='15'>";
+		$pagingObj->displayPaging($queryString);
+		echo "&nbsp;&nbsp;</td></tr>";	
+	?>
+	</table>
+	<?php
+
+		}
+		else
+		{
+			if(!isset($_GET['increaseLimit']) && $isSearchedResultByName == 1){
+				ob_clean();
+				header("Location: ".SITE_URL_EMPLOYEES."/new-pdf-work.php?increaseLimit=1".$queryString);
+		        exit();
+			}
+			else{
+				if(empty($noRecordsFoundFor))
+				{
+					$noRecordsFoundFor		=	"NO RECORD FOUND";
+				}
+				else
+				{
+					$noRecordsFoundFor		=	substr($noRecordsFoundFor,4);
+					$noRecordsFoundFor		=	"NO RECORD FOUND FOR : ".$noRecordsFoundFor;
+				}
+				echo "<table width='100%' border='0' style='text-align:center' height='300'><tr><td style='text-align:center;' class='error2'><b>".$noRecordsFoundFor."</b></td></tr></table>";
+			}			
+			
+		}
+	}
+	else
+	{
+		echo "<table width='22%' border='0' align='center' height='300'><tr><td align='center' class='error2'><b>PLEASE SUBMIT THE ABOVE FORM</b></td></tr></table>";
+	}
+	include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+?>

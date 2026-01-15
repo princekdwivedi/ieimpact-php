@@ -1,0 +1,612 @@
+<?php
+	ob_start();
+	session_start();
+	error_reporting(E_ALL);
+	ini_set('display_errors', '1');
+	include("../root.php");
+	include(SITE_ROOT_EMPLOYEES . "/includes/top.php");
+	include(SITE_ROOT_EMPLOYEES . "/includes/check-login.php");
+	include(SITE_ROOT_EMPLOYEES . "/classes/employee.php");
+	include(SITE_ROOT			. "/includes/common-array.php");
+	include(SITE_ROOT_EMPLOYEES	. "/includes/common-array.php");
+	include(SITE_ROOT_EMPLOYEES	.   "/classes/orders.php");
+	$orderObj					=   new orders();
+	$employeeObj				=	new employee();
+	include(SITE_ROOT_EMPLOYEES	. "/includes/set-variables.php");
+	
+	if(empty($s_hasManagerAccess) || empty($s_hasAdminAccess))
+	{
+		ob_clean();
+		header("Location: ".SITE_URL_EMPLOYEES);
+		exit();
+	}
+
+	$currentDate	=	 CURRENT_DATE_INDIA;
+	$currentTime    =    CURRENT_TIME_INDIA;
+	$yesterdayDate	=	 date('Y-m-d', strtotime("-1 day", strtotime($currentDate)));
+
+	$all_employees 	    =	array();
+	$all_employees_ids 	=	array();
+
+	$isShowingDayShift     =	0;
+	if(isset($_GET['dayshift'])){
+		$isShowingDayShift = $_GET['dayshift'];
+	}
+
+	///////////////////////GET ALL ACTIVE PDF EMPLOYEES //////////////////
+	$allEmployees 		=	$employeeObj->getAllDayShiftPdfEmployees();
+	if(($currentTime > "20:00:00" || $currentTime <= "08-00-00") && $isShowingDayShift == 0){
+		$allEmployees 	=	$employeeObj->getAllNightShiftPdfEmployees();
+	}
+
+	if(mysqli_num_rows($allEmployees)){
+		while($row		=	mysqli_fetch_assoc($allEmployees)){
+			$employeeId =	$row['employeeId'];
+			$firstName  =	stripslashes($row['firstName']);
+			$lastName   =	stripslashes($row['lastName']);
+
+			$all_employees[$employeeId] = $firstName." ".$lastName;
+			$all_employees_ids[]        = $employeeId;
+		}
+	}
+
+	////////////////////////////ALL FIRST LEVEL EMPLOYEES /////////////////////////////
+	$all_first_level   =	array();
+	$all_processed_total   =	array();
+	$all_second_level  =    array();
+	$all_24_hours	   =    array();
+	$all_12_hours	   =    array();
+	$all_06_hours	   =    array();
+	$on_leave_employees=    array();
+	$work_status_added =    array();
+
+	$added_attendance_employees=    array();
+	$headingText	   =    $headingText1 = "VIEW WORK STATUS DAY SHIFT - ".showDate($currentDate);
+	
+	if(!empty($isShowingDayShift)){
+		$headingText   =    "VIEW WORK STATUS DAY SHIFT - ".showDate($currentDate)." (<a href='".SITE_URL_EMPLOYEES."/daily-work-status.php'>View Night Shift</a>)";
+	}
+	
+	$andClause 		   =	" AND assignToEmployee='".$currentDate."' AND assignToTime >= '08:00:00' AND assignToTime <= '20:00:00'";
+
+	$andClause1 	   =	" AND orderCompletedOn='".$currentDate."' AND completedTime >= '08:00:00' AND completedTime <= '20:00:00'";
+
+	$orderNotProcessed =	" AND orderAddedOn='".$currentDate."' AND orderAddedTime >= '08:00:00' AND orderAddedTime <= '20:00:00'";
+
+	$reportClause      =    "AND reportDate='".CURRENT_DATE_INDIA."' AND reportTime >= '08:00:00' AND reportTime <= '20:00:00'";
+
+	if(($currentTime > "20:00:00" || $currentTime <= "08-00-00") && $isShowingDayShift == 0){
+		
+
+		$headingText	   =    "VIEW WORK STATUS NIGHT SHIFT - ".showDate($currentDate)." (<a href='".SITE_URL_EMPLOYEES."/daily-work-status.php?dayshift=1'>Check Todays Day Shift</a>)";
+
+	    $headingText1	   =    "VIEW WORK STATUS NIGHT SHIFT - ".showDate($currentDate);
+		/////////////////// FROM EVENING 8 PM TO MORNING 8 AM
+		if($currentTime > "20:00:00" && $currentTime < "23:59:59"){
+			//////////////////// IF FROM 1 AM to 8 AM//////////////////
+			$andClause 		=	" AND assignToEmployee ='$currentDate' AND assignToTime >= '20:00:00'";
+
+			$andClause1 	=	" AND orderCompletedOn ='$currentDate' AND completedTime >= '20:00:00'";
+
+			$orderNotProcessed =	" AND orderAddedOn='".$currentDate."' AND orderAddedTime >= '20:00:00'";
+
+			$reportClause      =    "AND reportDate='".CURRENT_DATE_INDIA."' AND reportTime >= '20:00:00'";
+		}
+		elseif($currentTime > "00:00:01" && $currentTime < "08:00:00"){
+
+			$headingText	   =    "VIEW WORK STATUS NIGHT SHIFT - ".showDate($currentDate);
+			//////////////////// IF FROM 1 AM to 8 AM//////////////////
+			$andClause 		=	" AND ((assignToEmployee ='$currentDate' AND assignToTime >= '00:00:01' AND assignToTime <= '08:00:00') OR (assignToEmployee ='$yesterdayDate' AND assignToTime >= '20:00:00'))";
+
+			$andClause1		=	" AND ((orderCompletedOn ='$currentDate' AND completedTime >= '00:00:01' AND completedTime <= '08:00:00') OR (orderCompletedOn ='$yesterdayDate' AND completedTime >= '20:00:00'))";
+
+			$orderNotProcessed =	" AND ((orderAddedOn ='$currentDate' AND orderAddedTime >= '00:00:01' AND orderAddedTime <= '08:00:00') OR (orderAddedOn ='$yesterdayDate' AND orderAddedTime >= '20:00:00'))";
+
+			$reportClause =	" AND ((reportDate ='$currentDate' AND reportTime >= '00:00:01' AND reportTime <= '08:00:00') OR (reportDate ='$yesterdayDate' AND reportTime >= '20:00:00'))";
+		}
+		
+	}
+
+	$newOrdersNotProcessed		=	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status=0 AND hasRepliedUploaded=0 AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+	if(empty($newOrdersNotProcessed)){
+		$newOrdersNotProcessed	=	0;
+	}
+	else{
+		$newOrdersNotProcessed =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchOrderType=1' style='font-size:18px;'>".$newOrdersNotProcessed."</a>";
+	}
+
+	$newOrdersNeedAttention	=	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND isOrderNeedAttention=1 AND isDeleted=0 AND isVirtualDeleted=0 AND status NOT IN (2,5,6)","total");
+
+	
+	if(empty($newOrdersNeedAttention)){
+		$newOrdersNeedAttention	=	0;
+	}
+	else{
+		$newOrdersNeedAttention =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchOrderType=5' style='font-size:18px;'>".$newOrdersNeedAttention."</a>";
+	}
+
+	$ordersInProcessed		=	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status=1 AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+	if(empty($ordersInProcessed)){
+		$ordersInProcessed	=	0;
+	}
+	else{
+		$ordersInProcessed =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchOrderType=2' style='font-size:18px;'>".$ordersInProcessed."</a>";
+	}
+
+	$qaPendingOrders		=	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status NOT IN (0,3,2,5,6) AND hasRepliedUploaded=1 AND qaDoneById=0 AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+	if(empty($qaPendingOrders)){
+		$qaPendingOrders	=	0;
+	}
+
+	$uncheckedFilesOrders  		 =	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND isOrderChecked=0 AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+	if(empty($uncheckedFilesOrders)){
+		$uncheckedFilesOrders	=	0;
+	}
+	else{
+		$uncheckedFilesOrders =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchUnchecked=1' style='font-size:18px;'>".$uncheckedFilesOrders."</a>";
+	}
+
+	$checkTimeExceed=	CURRENT_DATE_INDIA." ".CURRENT_TIME_INDIA;
+
+	$ordersExceededTat  		 =	$employeeObj->getSingleQueryResult("SELECT COUNT(*) as total FROM members_orders WHERE orderId > '".MAX_SEARCH_MEMBER_ORDERID."' AND isVirtualDeleted=0 AND isHavingEstimatedTime=1 AND status IN (0,1) AND CONCAT(employeeWarningDate, ' ', employeeWarningTime) < '$checkTimeExceed'","total");
+
+	if(empty($ordersExceededTat)){
+		$ordersExceededTat	=	0;
+	}
+	else{
+		$ordersExceededTat =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchExceedTat=1' style='font-size:18px;'>".$ordersExceededTat."</a>";
+	}
+
+	$totalUnrepliedOrdersMsg	=	$orderObj->getTotalUnrepliedOrderMessage();
+	if(empty($totalUnrepliedOrdersMsg)){
+		$totalUnrepliedOrdersMsg	=	0;
+	}
+	else{
+		$totalUnrepliedOrdersMsg =  "<a href='".SITE_URL_EMPLOYEES."/pdf-customer-messages.php?unrepliedMsg=1#second' style='font-size:18px;'>".$totalUnrepliedOrdersMsg."</a>";
+	}
+	$totalUnrepliedRating    	=	$orderObj->getAllTotalUnrepliedRatingMessage();
+	if(empty($totalUnrepliedRating)){
+		$totalUnrepliedRating	=	0;
+	}
+	else{
+		$totalUnrepliedRating   =  "<a href='".SITE_URL_EMPLOYEES."/pdf-customer-messages.php?unrepliedRatingMsg=1#third' style='font-size:18px;'>".$totalUnrepliedRating."</a>";
+	}
+
+
+
+	$uncompletedRushOrders     =	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status NOT IN (2,5,6) AND isRushOrder=1 AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+
+	if(empty($uncompletedRushOrders)){
+		$uncompletedRushOrders	=	0;
+	}
+
+	$incomplteOrders     =	$employeeObj->getSingleQueryResult("SELECT COUNT(orderId) as total FROM members_orders WHERE orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND status NOT IN (2,5,6) AND isDeleted=0 AND isVirtualDeleted=0","total");
+
+
+	if(empty($incomplteOrders)){
+		$incomplteOrders =	0;
+	}
+	else{
+		$incomplteOrders =  "<a href='".SITE_URL_EMPLOYEES."/new-pdf-work.php?isSubmittedForm=1&searchOrderType=4' style='font-size:18px;'>".$incomplteOrders."</a>";
+	}
+
+	$a_unrepliedGeneralMsg		=	$orderObj->getAllUnrepliedGeneralMessageCustomers();
+	$totalUnrepliedGeneralMsg   =   count($a_unrepliedGeneralMsg);
+
+	if(empty($totalUnrepliedGeneralMsg)){
+		$totalUnrepliedGeneralMsg =	0;
+	}
+	else{
+		$totalUnrepliedGeneralMsg =  "<a href='".SITE_URL_EMPLOYEES."/pdf-customer-messages.php?unrepliedGeneralMsg=1#fifth' style='font-size:18px;'>".$totalUnrepliedGeneralMsg."</a>";
+	}
+
+
+
+
+
+	///////////////////////// GET FIRST LEVEL ORDERS DONE ////////////////////////////////////
+	$query			=	"SELECT COUNT(orderId) as total,acceptedBy from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND acceptedBy  <> 0".$andClause." GROUP BY acceptedBy HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$acceptedBy =	$row['acceptedBy'];
+			$total      =	$row['total'];
+
+			$all_first_level[$acceptedBy] = $total;
+		}
+	}
+
+	arsort($all_first_level);
+	//pr($all_employees);
+	// Separate matching and non-matching keys
+	$matching = [];
+	$non_matching = [];
+
+	foreach ($all_employees as $key => $value) {
+	    if (array_key_exists($key, $all_first_level)) {
+	        $matching[$key] = $value;
+	    } else {
+	        $non_matching[$key] = $value;
+	    }
+	}
+
+	// Sort matching keys by values in descending order
+	arsort($matching);
+
+	// Merge sorted matching keys with non-matching keys (keeping their original order)
+	$all_employees = $matching + $non_matching;
+
+	//pr($all_employees);
+
+	///////////////////////// GET PROCEED ORDERS DONE ////////////////////////////////////
+    echo $query			=	"SELECT COUNT(orderId) as total,acceptedBy from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND acceptedBy  <> 0 AND hasRepliedUploaded=1 AND status <> 2".$andClause." GROUP BY acceptedBy HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$acceptedBy =	$row['acceptedBy'];
+			$total      =	$row['total'];
+
+			$all_processed_total[$acceptedBy] = $total;
+		}
+	}
+
+
+	/////////////////////// GET SECOND LEVEL ORDERS DONE ////////////////////////////////////
+	$query			=	"SELECT COUNT(orderId) as total,qaDoneById from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND qaDoneById  <> 0".$andClause1." GROUP BY qaDoneById HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$qaDoneById =	$row['qaDoneById'];
+			$total      =	$row['total'];
+
+			$all_second_level[$qaDoneById] = $total;
+		}
+	}
+
+	//$a_estimatedTimeArray	=	array("2"=>"Deliver in 24 Hours","0"=>"Deliver in 12 Hours","1"=>"Deliver in 6 Hours");
+
+	///////////////////////// GET 24 HRS ORDERS DONE ////////////////////////////////////
+	$query			=	"SELECT COUNT(orderId) as total,acceptedBy from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND isRushOrder=2 AND acceptedBy  <> 0".$andClause." GROUP BY acceptedBy HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$acceptedBy =	$row['acceptedBy'];
+			$total      =	$row['total'];
+
+			$all_24_hours[$acceptedBy] = $total;
+		}
+	}
+
+	///////////////////////// GET 12 HRS ORDERS DONE ////////////////////////////////////
+	$query			=	"SELECT COUNT(orderId) as total,acceptedBy from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND isRushOrder=0 AND acceptedBy  <> 0".$andClause." GROUP BY acceptedBy HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$acceptedBy =	$row['acceptedBy'];
+			$total      =	$row['total'];
+
+			$all_12_hours[$acceptedBy] = $total;
+		}
+	}
+
+	///////////////////////// GET 12 HRS ORDERS DONE ////////////////////////////////////
+	$query			=	"SELECT COUNT(orderId) as total,acceptedBy from members_orders where orderId > ".MAX_SEARCH_EMPLOYEE_ORDER_ID." AND isRushOrder=1 AND acceptedBy  <> 0".$andClause." GROUP BY acceptedBy HAVING total > 0 ORDER BY total";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$acceptedBy =	$row['acceptedBy'];
+			$total      =	$row['total'];
+
+			$all_06_hours[$acceptedBy] = $total;
+		}
+	}
+
+	///////////////////////// GET ALL EMPLOYEES ON LEAVE ////////////////////////////////////
+	$query			=	"SELECT employeeId,onLeave from employee_attendence where loginDate='".CURRENT_DATE_INDIA."'";
+	$result 		=	dbQuery($query);
+	if(mysqli_num_rows($result)){
+		while($row		=	mysqli_fetch_assoc($result)){
+			$employeeId =	$row['employeeId'];
+			$onLeave      =	$row['onLeave'];
+
+			if($onLeave != 0){
+				$on_leave_employees[$employeeId] = $onLeave;
+			}			
+			$added_attendance_employees[]    = $employeeId;
+		}
+	}
+
+	/////////////////////// GET EMPLOYEE DAILY WORK STATUS ////////////////////////////////////
+	if(!empty($all_employees_ids) && count($all_employees_ids) > 0){
+		$all_employees_ids = implode(",",$all_employees_ids);
+		$query			=	"SELECT statusReport,employeeId FROM employee_daily_status_report WHERE employeeId IN ($all_employees_ids)".$reportClause;
+		$result 		=	dbQuery($query);
+		if(mysqli_num_rows($result)){
+			while($row		  =	mysqli_fetch_assoc($result)){
+				$statusReport =	stripslashes($row['statusReport']);
+				$employeeId   =	$row['employeeId'];
+	
+				$work_status_added[$employeeId] = $statusReport;
+			}
+		}
+	}
+	
+
+
+?>
+	<table width="98%" align="center" border="0" cellpadding="2" cellspacing="2">
+		<tr>
+			<td colspan="10" class="heading"><?php echo $headingText;?></td>
+		</tr>
+		<tr>
+			<td width="5%" class="smalltext6"><b>Sr No.</b></td>
+			<td width="15%" class="smalltext6"><b>Name</b></td>	
+			<td width="10%" class="smalltext6"><b>Accepted</b></td>
+			<td width="10%" class="smalltext6"><b>Processed</b></td>
+			<td width="10%" class="smalltext6"><b>Qa Done</b></td>
+			<td width="10%" class="smalltext6"><b>Rush</b></td>
+			<td width="10%" class="smalltext6"><b>12 Hrs</b></td>
+			<td width="10%" class="smalltext6"><b>24 Hrs</b></td>	
+			<td class="smalltext6"><b>Remarks</b></td>		
+		</tr>
+		<tr>
+			<td colspan="9"><hr size="1" width="100%" color="#bebebe"></td>
+		</tr
+		<?php
+			$count 	=	0;
+			$totalProcessed 	=	0;
+			$totalQa 	        =	0;
+			$totalRush 	        =	0;
+			$totalTwelve        =	0;
+			$totalTwentyFour    =	0;
+			
+			foreach($all_employees as $employeeId=>$employeeName){
+				$count++;
+		?>
+		<tr>				
+			<td class="smalltext6" valign='top'><?php echo $count;?>)</td>
+			<td valign='top'><a href="<?php echo SITE_URL_EMPLOYEES;?>/new-pdf-work.php?isSubmittedForm=1&orderOf=<?php echo $employeeId;?>&showingEmployeeOrder=1" class='link_style6'><?php echo $employeeName;?></td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_first_level)){
+						echo $processed =	$all_first_level[$employeeId];
+						$totalProcessed =   $totalProcessed+$processed;
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "<font color='#FF0000;'>Leave</font>";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "<font color='#FF0000;'>Leave</font>";
+					}
+					else{
+						echo "0";
+					}
+			
+				?>
+				
+			</td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_processed_total)){
+						echo $processed =	$all_processed_total[$employeeId];
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "-";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "-";
+					}
+					else{
+						echo "0";
+					}
+			
+				?>
+				
+			</td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_second_level)){
+						echo $qa = $all_second_level[$employeeId];
+
+						$totalQa =   $totalQa+$qa;
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "-";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "-";
+					}
+					else{
+						echo "0";
+					}
+					
+				?>
+				
+			</td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_06_hours)){
+						echo $six = $all_06_hours[$employeeId];
+						$totalRush= $totalRush+$six;
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "-";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "-";
+					}
+					else{
+						echo "0";
+					}
+					
+				?>
+			
+			
+			</td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_12_hours)){
+						echo $tweleve	= $all_12_hours[$employeeId];
+
+						$totalTwelve= $totalTwelve+$tweleve;
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "-";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "-";
+					}
+					else{
+						echo "0";
+					}
+					
+				?>
+				
+			</td>
+			<td class="smalltext6" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$all_24_hours)){
+						echo $twentyFour = $all_24_hours[$employeeId];
+
+						$totalTwentyFour= $totalTwentyFour+$twentyFour;
+					}
+					elseif(array_key_exists($employeeId,$on_leave_employees)){
+						echo "-";
+					}
+					elseif(!in_array($employeeId,$added_attendance_employees)){
+						echo "-";
+					}
+					else{
+						echo "0";
+					}
+					
+				?>
+				
+			</td>
+			<td class="smalltext7" valign='top'>	
+				<?php 
+					if(array_key_exists($employeeId,$work_status_added)){
+						echo $work_status_added[$employeeId];
+					}
+					else{
+						echo "N/A";
+					}
+					
+				?>
+				
+			</td>
+		</tr>
+		<tr>
+			<td colspan="9"><hr size="1" width="100%" color="#bebebe"></td>
+		</tr
+		<?php
+			}
+		?>
+		>
+		<tr>
+			<td colspan="2" class="text5" style="text-align:right"><b>Total</b></td>
+			<td class="smalltext24"><b><?php echo $totalProcessed;?></b></td>
+			<td class="smalltext24"><b><?php echo $totalQa;?></b></td>
+			<td class="smalltext24"><b><?php echo $totalRush;?></b></td>
+			<td class="smalltext24"><b><?php echo $totalTwelve;?></b></td>
+			<td class="smalltext24"><b><?php echo $totalTwentyFour;?></b></td>
+
+		</tr>
+	</table>
+	<br /><brr />
+	<table width="65%" align="center" border="0" cellpadding="2" cellspacing="2">
+		<tr>
+			<td colspan="10" class="heading"><?php echo $headingText1;?> at <?php echo CURRENT_TIME_INDIA;?> HRS</td>
+		</tr>
+		<tr>
+			<td width="10%" class="smalltext23"><b>Sr No.</b></td>
+			<td width="40%" class="smalltext23"><b>Todays Status</b></td>	
+			<td class="smalltext23"><b>Total</b></td>
+		</tr>
+		<tr>
+			<td class="smalltext24">1)</td>
+			<td class="smalltext23">New Orders Not Processed</td>	
+			<td class="smalltext23">
+				<b><?php echo $newOrdersNotProcessed;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">2)</td>
+			<td class="smalltext23">Orders Need Attention</td>	
+			<td class="smalltext23">
+				<b><?php echo $newOrdersNeedAttention;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">3)</td>
+			<td class="smalltext23">Orders In Process</td>	
+			<td class="smalltext23">
+				<b><?php echo $ordersInProcessed;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">4)</td>
+			<td class="smalltext23">Qa Pending Orders</td>	
+			<td class="smalltext23">
+				<b><?php echo $qaPendingOrders;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">5)</td>
+			<td class="smalltext23">Orders Unchecked Files</td>	
+			<td class="smalltext23">
+				<b><?php echo $uncheckedFilesOrders;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">6)</td>
+			<td class="smalltext23">Orders Excedded Tat</td>	
+			<td class="smalltext23">
+				<b><?php echo $ordersExceededTat?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">7)</td>
+			<td class="smalltext23">Incompleted Rush Orders</td>	
+			<td class="smalltext23">
+				<b><?php echo $uncompletedRushOrders;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">8)</td>
+			<td class="smalltext23">Incomplete Orders</td>	
+			<td class="smalltext23">
+				<b><?php echo $incomplteOrders;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">9)</td>
+			<td class="smalltext23">Messages Not Replied</td>	
+			<td class="smalltext23">
+				<b><?php echo $totalUnrepliedOrdersMsg;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">11)</td>
+			<td class="smalltext23">Ratings Not Replied</td>	
+			<td class="smalltext23">
+				<b><?php echo $totalUnrepliedRating;?></b>
+			</td>
+		</tr>
+		<tr>
+			<td class="smalltext24">12)</td>
+			<td class="smalltext23">Email Messages Not Replied</td>	
+			<td class="smalltext23">
+				<b><?php echo $totalUnrepliedGeneralMsg;?></b> 
+			</td>
+		</tr>
+	</table>
+<?php
+
+	include(SITE_ROOT_EMPLOYEES . "/includes/bottom.php");
+?>
