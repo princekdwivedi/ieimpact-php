@@ -227,7 +227,8 @@
 	// Save status to file in resultPath
 	if(!empty($resultPath))
 	{
-		$statusFile = $resultPath . '/ocrFiles/ocr-processing-status.json';
+		$ocrFilesPath = $resultPath . '/ocrFiles';
+		$statusFile = $ocrFilesPath . '/ocr-processing-status.json';
 		
 		// If jobId is still null, try to extract it from response one more time
 		if(empty($jobId) && $responseData && is_array($responseData))
@@ -250,14 +251,101 @@
 			'jobId' => $jobId
 		);
 		
-		// Ensure directory exists
+		// Ensure resultPath directory exists
 		if(!is_dir($resultPath))
 		{
 			@mkdir($resultPath, 0755, true);
 		}
 		
-		// Write status file
-		@file_put_contents($statusFile, json_encode($statusData, JSON_PRETTY_PRINT));
+		// Check if parent directory is writable (we need this to create subdirectories)
+		if(!is_writable($resultPath))
+		{
+			// Try to make parent writable
+			@chmod($resultPath, 0755);
+		}
+		
+		// If ocrFiles directory exists but is not writable, try to fix it or recreate it
+		if(is_dir($ocrFilesPath))
+		{
+			if(!is_writable($ocrFilesPath))
+			{
+				// Try to change permissions
+				@chmod($ocrFilesPath, 0755);
+				
+				// If still not writable and parent is writable, try to remove and recreate
+				if(!is_writable($ocrFilesPath) && is_writable($resultPath))
+				{
+					// Remove existing directory and recreate it (this ensures correct ownership)
+					@rmdir($ocrFilesPath);
+					@mkdir($ocrFilesPath, 0755, true);
+				}
+			}
+		}
+		else
+		{
+			// Create ocrFiles directory if it doesn't exist
+			@mkdir($ocrFilesPath, 0755, true);
+		}
+		
+		// Final check - if still not writable, try writing to parent directory instead
+		$targetDir = $ocrFilesPath;
+		if(!is_writable($ocrFilesPath))
+		{
+			// Fallback: write to resultPath instead of ocrFiles subdirectory
+			$targetDir = $resultPath;
+			$statusFile = $resultPath . '/ocr-processing-status.json';
+		}
+		
+		// Ensure target directory is writable
+		if(!is_writable($targetDir))
+		{
+			@chmod($targetDir, 0755);
+		}
+		
+		// Prepare JSON data
+		$jsonData = json_encode($statusData, JSON_PRETTY_PRINT);
+		
+		// Write status file - create if doesn't exist, overwrite if exists
+		$writeResult = false;
+		if(is_writable($targetDir))
+		{
+			// Try to write the file
+			$writeResult = @file_put_contents($statusFile, $jsonData, LOCK_EX);
+			
+			// If file doesn't exist and write failed, try creating it first
+			if($writeResult === false && !file_exists($statusFile))
+			{
+				// Try to create an empty file first
+				$tempFile = @fopen($statusFile, 'w');
+				if($tempFile !== false)
+				{
+					@fclose($tempFile);
+					// Now try writing again
+					$writeResult = @file_put_contents($statusFile, $jsonData, LOCK_EX);
+				}
+			}
+			
+			// Set file permissions after writing
+			if($writeResult !== false && file_exists($statusFile))
+			{
+				@chmod($statusFile, 0644);
+			}
+		}
+		
+		// If file write failed, try to get more details
+		if($writeResult === false)
+		{
+			$errorDetails = array(
+				'file' => $statusFile,
+				'file_exists' => file_exists($statusFile) ? 'yes' : 'no',
+				'dir_exists' => is_dir($targetDir) ? 'yes' : 'no',
+				'dir_writable' => is_writable($targetDir) ? 'yes' : 'no',
+				'dir_permissions' => is_dir($targetDir) ? substr(sprintf('%o', fileperms($targetDir)), -4) : 'N/A',
+				'parent_writable' => is_writable($resultPath) ? 'yes' : 'no',
+				'disk_free_space' => disk_free_space($resultPath)
+			);
+			error_log("Failed to write OCR status file. Details: " . json_encode($errorDetails));
+		}
 	}
 	
 	// Return response
