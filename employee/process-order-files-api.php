@@ -227,7 +227,7 @@
 	// Save status to file in resultPath
 	if(!empty($resultPath))
 	{
-		$statusFile = $resultPath . '/ocr-processing-status.json';
+		$statusFile = $resultPath . '/ocrFiles/ocr-processing-status.json';
 		
 		// If jobId is still null, try to extract it from response one more time
 		if(empty($jobId) && $responseData && is_array($responseData))

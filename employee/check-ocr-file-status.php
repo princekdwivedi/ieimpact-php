@@ -50,7 +50,7 @@
 		$downloadFileName = "extracted-data.pdf";
 		$downloadPathInfo = pathinfo($downloadPath);
 		$ocrFilePath = $downloadPathInfo['dirname'] . "/ocrFiles/$downloadFileName";
-		$statusFilePath = $downloadPathInfo['dirname'] . "/ocr-processing-status.json";
+		$statusFilePath = $downloadPathInfo['dirname'] . "/ocrFiles/ocr-processing-status.json";
 		
 		// Check status file for jobId if not provided
 		if(empty($jobId) && file_exists($statusFilePath))

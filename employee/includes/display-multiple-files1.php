@@ -380,7 +380,7 @@ if($totalCustomerOrderFils > 1){
 		// check if the order folder exists
 		if (is_dir($downloadPathInfo['dirname']) && file_exists($downloadPathInfo['dirname']) && file_exists($downloadPath)) {
 			$downloadPath           =   $downloadPathInfo['dirname'] . "/ocrFiles/$downloadFileName";
-			$statusFilePath = $downloadPathInfo['dirname'] . "/ocr-processing-status.json";
+			$statusFilePath = $downloadPathInfo['dirname'] . "/ocrFiles/ocr-processing-status.json";
 			$statusData = null;
 			
 			// Check for status file
