@@ -37,6 +37,27 @@
 		exit();
 	}
 	
+	// Check if feedback feature is enabled for this order (development mode - only for specific order)
+	$allowedOrderId = 587801;
+	$allowedCustomerId = 2437;
+	
+	// Get customerId from order
+	$customerId = 0;
+	$customerQuery = "SELECT memberId FROM members_orders WHERE orderId=$orderId AND isVirtualDeleted=0 LIMIT 1";
+	$customerResult = dbQuery($customerQuery);
+	if(mysqli_num_rows($customerResult))
+	{
+		$customerRow = mysqli_fetch_assoc($customerResult);
+		$customerId = $customerRow['memberId'];
+	}
+	
+	// Validate if feedback is allowed for this order
+	if($orderId != $allowedOrderId || $customerId != $allowedCustomerId)
+	{
+		echo json_encode(array('success' => false, 'message' => 'Feedback feature is currently under development and only available for specific orders.'));
+		exit();
+	}
+	
 	if(empty($userId))
 	{
 		echo json_encode(array('success' => false, 'message' => 'User ID is required. Please login again.'));

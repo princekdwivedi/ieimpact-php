@@ -392,29 +392,38 @@ if($totalCustomerOrderFils > 1){
 			}
 			
 			if(file_exists($downloadPath)) {
-				// Fetch feedback for this order
-				$feedbackQuery = "SELECT f.*, e.fullName as employeeName 
-								  FROM ocr_data_feedback f 
-								  LEFT JOIN employee_details e ON f.userId = e.employeeId 
-								  WHERE f.orderId = $orderId 
-								  ORDER BY f.addedOn DESC, f.addedTime DESC";
-				$feedbackResult = dbQuery($feedbackQuery);
-				$feedbackCount = mysqli_num_rows($feedbackResult);
+				// Check if feedback feature is enabled for this order (development mode - only for specific order)
+				$feedbackEnabled = ($orderId == 587801 && $customerId == 2437);
+				
+				// Fetch feedback for this order (only if feature is enabled)
+				$feedbackCount = 0;
+				$feedbackResult = null;
+				if($feedbackEnabled) {
+					$feedbackQuery = "SELECT f.*, e.fullName as employeeName 
+									  FROM ocr_data_feedback f 
+									  LEFT JOIN employee_details e ON f.userId = e.employeeId 
+									  WHERE f.orderId = $orderId 
+									  ORDER BY f.addedOn DESC, f.addedTime DESC";
+					$feedbackResult = dbQuery($feedbackQuery);
+					$feedbackCount = mysqli_num_rows($feedbackResult);
+				}
 				?>
 				<tr>
 					<td>&nbsp;</td>
 					<td colspan="2" align="left">
 						(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo SITE_URL_EMPLOYEES."/download-multiple-file.php?".$M_D_5_ORDERID."=".$encodeOrderID."&".$M_D_5_ID."&FILE_TYPE=OCR_RESULT";?>');" title="View AI-Extracted Property Details" style="cursor:pointer;"><b>View AI-Extracted Property Details</b></a>)
-						&nbsp;|&nbsp;
-						(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Provide Feedback" style="cursor:pointer; color: #0080C0;"><b>Add Feedback</b></a>)
-						<?php if($feedbackCount > 0): ?>
+						<?php if($feedbackEnabled): ?>
 							&nbsp;|&nbsp;
-							<span style="color: #666; font-size: 11px;">(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)</span>
+							(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Provide Feedback" style="cursor:pointer; color: #0080C0;"><b>Add Feedback</b></a>)
+							<?php if($feedbackCount > 0): ?>
+								&nbsp;|&nbsp;
+								<span style="color: #666; font-size: 11px;">(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)</span>
+							<?php endif; ?>
 						<?php endif; ?>
 					</td>
 				</tr>
 				
-				<?php if($feedbackCount > 0): ?>
+				<?php if($feedbackEnabled && $feedbackCount > 0): ?>
 				<tr>
 					<td>&nbsp;</td>
 					<td colspan="2" align="left" style="padding-top: 10px;">
