@@ -7,6 +7,27 @@
 	include(SITE_ROOT_EMPLOYEES . "/includes/session-vars.php");
 	include(SITE_ROOT_EMPLOYEES . "/includes/check-login.php");
 	
+	// Function to format file size
+	function getFileSize($fileSize)
+	{
+		if($fileSize < 1024)
+		{
+			return $fileSize . " Bytes";
+		}
+		elseif($fileSize < (1024 * 1024))
+		{
+			return round($fileSize / 1024, 2) . " KB";
+		}
+		elseif($fileSize < (1024 * 1024 * 1024))
+		{
+			return round($fileSize / (1024 * 1024), 2) . " MB";
+		}
+		else
+		{
+			return round($fileSize / (1024 * 1024 * 1024), 2) . " GB";
+		}
+	}
+	
 	header('Content-Type: application/json');
 	
 	$orderId = 0;
