@@ -415,10 +415,10 @@ if($totalCustomerOrderFils > 1){
 						<?php if($feedbackEnabled): ?>
 							&nbsp;|&nbsp;
 							(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Add/Review Feedback" style="cursor:pointer; color: #0080C0;"><b>Add/Review Feedback</b></a>)
-							<?php if($feedbackCount > 0): ?>
-								&nbsp;|&nbsp;
-								<span style="color: #666; font-size: 11px;">(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)</span>
-							<?php endif; ?>
+							&nbsp;|&nbsp;
+							<span id="ocrFeedbackCountDisplay" style="color: #666; font-size: 11px; <?php echo $feedbackCount > 0 ? '' : 'display: none;'; ?>">
+								(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)
+							</span>
 						<?php endif; ?>
 					</td>
 				</tr>
@@ -798,7 +798,7 @@ if($totalCustomerOrderFils > 1){
 				</div>
 				
 				<div class="ocr-feedback-form-group">
-					<label for="ocrFeedbackFiles">Upload Files <span style="color: #999;">(Optional, Max 3 files allowed)</span></label>
+					<label for="ocrFeedbackFiles">Upload Supporting File(s) <span style="color: #999;">(Optional, Max 3 files allowed)</span></label>
 					<input type="file" id="ocrFeedbackFiles" name="feedbackFiles[]" multiple accept="*/*">
 					<div id="ocrFeedbackFileList" class="ocr-feedback-file-list" style="display: none;"></div>
 				</div>
@@ -813,7 +813,7 @@ if($totalCustomerOrderFils > 1){
 			
 			<!-- Feedback List Section -->
 			<div id="ocrFeedbackListContainer" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 20px; display: none;">
-				<strong style="color: #333; font-size: 14px; display: block; margin-bottom: 15px;">Previous Feedback:</strong>
+				<strong style="color: #333; font-size: 14px; display: block; margin-bottom: 15px;">Previous Feedbacks:</strong>
 				<div id="ocrFeedbackListContent" style="max-height: 300px; overflow-y: auto;">
 					<!-- Feedback list will be loaded here -->
 				</div>
@@ -890,7 +890,7 @@ function loadFeedbackList(orderId) {
 						}
 						if(fb.files && fb.files.length > 0) {
 							html += '<div style="margin-top: 8px; font-size: 11px;">';
-							html += '<strong style="color: #666;">Files:</strong><br>';
+							html += '<strong style="color: #666;">Supporting File(s):</strong><br>';
 							for(var j = 0; j < fb.files.length; j++) {
 								var file = fb.files[j];
 								html += '<a href="' + file.downloadUrl + '" target="_blank" style="color: #0080C0; text-decoration: underline; margin-right: 15px;">' + escapeHtml(file.originalName) + '</a> (' + file.size + ')<br>';
@@ -929,9 +929,50 @@ function escapeHtml(text) {
 	return text ? text.replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
 }
 
+function updateFeedbackCount(orderId) {
+	// Fetch updated feedback count via AJAX
+	var xhr = new XMLHttpRequest();
+	xhr.open('GET', '<?php echo SITE_URL_EMPLOYEES;?>/get-ocr-feedback-list.php?orderId=' + orderId, true);
+	
+	xhr.onload = function() {
+		if(xhr.status === 200) {
+			try {
+				var response = JSON.parse(xhr.responseText);
+				if(response.success) {
+					var count = response.count || 0;
+					var countDisplay = document.getElementById('ocrFeedbackCountDisplay');
+					
+					if(countDisplay) {
+						if(count > 0) {
+							countDisplay.style.display = '';
+							countDisplay.innerHTML = '(' + count + ' feedback' + (count > 1 ? 's' : '') + ' submitted)';
+						} else {
+							countDisplay.style.display = 'none';
+						}
+					}
+				}
+			} catch(e) {
+				console.error('Error updating feedback count:', e);
+			}
+		}
+	};
+	
+	xhr.onerror = function() {
+		console.error('Network error updating feedback count');
+	};
+	
+	xhr.send();
+}
+
 function closeOCRFeedbackModal() {
 	document.getElementById('ocrFeedbackModal').style.display = 'none';
 	document.body.style.overflow = '';
+	
+	// Update feedback count when modal is closed (in case feedback was submitted)
+	if(currentOCRFeedbackOrderId) {
+		updateFeedbackCount(currentOCRFeedbackOrderId);
+	}
+	
 	currentOCRFeedbackOrderId = null;
 }
 
@@ -1070,10 +1111,14 @@ function submitOCRFeedback(event) {
 					document.getElementById('ocrFeedbackFileList').innerHTML = '';
 					updateFeedbackCharCount();
 					
-					// Reload feedback list and reset form after 1.5 seconds
+					// Reload feedback list and update count after 1.5 seconds
 					setTimeout(function() {
 						// Reload feedback list
 						loadFeedbackList(orderId);
+						
+						// Update feedback count on page
+						updateFeedbackCount(orderId);
+						
 						// Reset form
 						document.getElementById('ocrFeedbackForm').reset();
 						updateFeedbackCharCount();
