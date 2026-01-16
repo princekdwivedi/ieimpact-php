@@ -392,6 +392,14 @@ if($totalCustomerOrderFils > 1){
 			}
 			
 			if(file_exists($downloadPath)) {
+				// Fetch feedback for this order
+				$feedbackQuery = "SELECT f.*, e.fullName as employeeName 
+								  FROM ocr_data_feedback f 
+								  LEFT JOIN employee_details e ON f.userId = e.employeeId 
+								  WHERE f.orderId = $orderId 
+								  ORDER BY f.addedOn DESC, f.addedTime DESC";
+				$feedbackResult = dbQuery($feedbackQuery);
+				$feedbackCount = mysqli_num_rows($feedbackResult);
 				?>
 				<tr>
 					<td>&nbsp;</td>
@@ -399,8 +407,64 @@ if($totalCustomerOrderFils > 1){
 						(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo SITE_URL_EMPLOYEES."/download-multiple-file.php?".$M_D_5_ORDERID."=".$encodeOrderID."&".$M_D_5_ID."&FILE_TYPE=OCR_RESULT";?>');" title="View AI-Extracted Property Details" style="cursor:pointer;"><b>View AI-Extracted Property Details</b></a>)
 						&nbsp;|&nbsp;
 						(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Provide Feedback" style="cursor:pointer; color: #0080C0;"><b>Add Feedback</b></a>)
+						<?php if($feedbackCount > 0): ?>
+							&nbsp;|&nbsp;
+							<span style="color: #666; font-size: 11px;">(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)</span>
+						<?php endif; ?>
 					</td>
 				</tr>
+				
+				<?php if($feedbackCount > 0): ?>
+				<tr>
+					<td>&nbsp;</td>
+					<td colspan="2" align="left" style="padding-top: 10px;">
+						<div style="border: 1px solid #ddd; padding: 10px; background: #f9f9f9; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+							<strong style="color: #333; font-size: 13px;">Submitted Feedback (<?php echo $feedbackCount; ?>):</strong>
+							<?php 
+							$fbIndex = 0;
+							while($feedbackRow = mysqli_fetch_assoc($feedbackResult)): 
+								$fbIndex++;
+								$feedbackText = stripslashes($feedbackRow['feedbackText']);
+								$feedbackFiles = json_decode($feedbackRow['feedbackFiles'], true);
+								$employeeName = !empty($feedbackRow['employeeName']) ? stripslashes($feedbackRow['employeeName']) : 'Unknown User';
+								$feedbackDate = $feedbackRow['addedOn'];
+								$feedbackTime = $feedbackRow['addedTime'];
+								$feedbackDateTime = $feedbackDate . ' ' . $feedbackTime;
+							?>
+							<div style="border-bottom: 1px solid #e0e0e0; padding: 10px 0; <?php echo $fbIndex < $feedbackCount ? 'margin-bottom: 10px;' : ''; ?>">
+								<div style="margin-bottom: 5px;">
+									<span style="font-weight: bold; color: #0080C0; font-size: 12px;"><?php echo htmlspecialchars($employeeName); ?></span>
+									<span style="color: #999; font-size: 11px; margin-left: 10px;"><?php echo date('M d, Y h:i A', strtotime($feedbackDateTime)); ?></span>
+								</div>
+								<?php if(!empty($feedbackText)): ?>
+								<div style="color: #333; font-size: 12px; margin: 5px 0; padding: 5px; background: #fff; border-left: 3px solid #0080C0;">
+									<?php echo nl2br(htmlspecialchars($feedbackText)); ?>
+								</div>
+								<?php endif; ?>
+								<?php if(!empty($feedbackFiles) && is_array($feedbackFiles) && count($feedbackFiles) > 0): ?>
+								<div style="margin-top: 5px; font-size: 11px;">
+									<strong style="color: #666;">Files:</strong>
+									<?php 
+									$fileLinks = array();
+									foreach($feedbackFiles as $file):
+										if(isset($file['path']) && file_exists($file['path'])):
+											$fileId = base64_encode($feedbackRow['id'] . '_' . $file['savedName']);
+											$fileLink = SITE_URL_EMPLOYEES . "/download-ocr-feedback-file.php?fileId=" . urlencode($fileId);
+											$fileLinks[] = '<a href="' . $fileLink . '" target="_blank" style="color: #0080C0; text-decoration: underline;">' . htmlspecialchars($file['originalName']) . '</a> (' . getFileSize($file['size']) . ')';
+										endif;
+									endforeach;
+									if(!empty($fileLinks)):
+										echo '<br>' . implode('<br>', $fileLinks);
+									endif;
+									?>
+								</div>
+								<?php endif; ?>
+							</div>
+							<?php endwhile; ?>
+						</div>
+					</td>
+				</tr>
+				<?php endif; ?>
 
 				<?php } else { 
 					// Check status file for errors or processing status
