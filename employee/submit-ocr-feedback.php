@@ -43,6 +43,12 @@
 		exit();
 	}
 	
+	if(empty($feedbackText))
+	{
+		echo json_encode(array('success' => false, 'message' => 'Feedback text is required.'));
+		exit();
+	}
+	
 	// Get order file path to determine feedback files directory
 	$query = "SELECT * FROM order_all_files WHERE fileId > ".MAX_SEARCH_MEMBER_ORDER_FILEID." AND orderId=$orderId AND isDeleted=0 LIMIT 1";
 	$result = dbQuery($query);

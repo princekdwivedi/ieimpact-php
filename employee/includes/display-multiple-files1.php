@@ -832,8 +832,11 @@ if($totalCustomerOrderFils > 1){
 			
 			<form id="ocrFeedbackForm" onsubmit="return submitOCRFeedback(event);">
 				<div class="ocr-feedback-form-group">
-					<label for="ocrFeedbackText">Feedback <span style="color: #999;">(Optional)</span></label>
-					<textarea id="ocrFeedbackText" name="feedbackText" placeholder="Please provide your feedback about the OCR extracted report..." rows="6"></textarea>
+					<label for="ocrFeedbackText">Feedback <span style="color: #999;">(Required, Max 1000 characters)</span></label>
+					<textarea id="ocrFeedbackText" name="feedbackText" placeholder="Please provide your feedback about the OCR extracted report..." rows="6" maxlength="1000" required></textarea>
+					<div style="text-align: right; margin-top: 5px; font-size: 12px; color: #666;">
+						<span id="ocrFeedbackCharCount">0</span> / 1000 characters
+					</div>
 				</div>
 				
 				<div class="ocr-feedback-form-group">
@@ -856,6 +859,22 @@ if($totalCustomerOrderFils > 1){
 <script type="text/javascript">
 var currentOCRFeedbackOrderId = null;
 
+function updateFeedbackCharCount() {
+	var textarea = document.getElementById('ocrFeedbackText');
+	var charCount = document.getElementById('ocrFeedbackCharCount');
+	if(textarea && charCount) {
+		var currentLength = textarea.value.length;
+		charCount.textContent = currentLength;
+		if(currentLength >= 1000) {
+			charCount.style.color = '#c33';
+		} else if(currentLength >= 900) {
+			charCount.style.color = '#f90';
+		} else {
+			charCount.style.color = '#666';
+		}
+	}
+}
+
 function openOCRFeedbackModal(orderId) {
 	currentOCRFeedbackOrderId = orderId;
 	document.getElementById('ocrFeedbackOrderId').value = orderId;
@@ -864,6 +883,7 @@ function openOCRFeedbackModal(orderId) {
 	document.getElementById('ocrFeedbackSuccess').style.display = 'none';
 	document.getElementById('ocrFeedbackFileList').style.display = 'none';
 	document.getElementById('ocrFeedbackFileList').innerHTML = '';
+	updateFeedbackCharCount();
 	document.getElementById('ocrFeedbackModal').style.display = 'block';
 	document.body.style.overflow = 'hidden';
 }
@@ -904,6 +924,13 @@ document.getElementById('ocrFeedbackFiles').addEventListener('change', function(
 	}
 });
 
+// Update character count as user types
+var ocrFeedbackTextarea = document.getElementById('ocrFeedbackText');
+if(ocrFeedbackTextarea) {
+	ocrFeedbackTextarea.addEventListener('input', updateFeedbackCharCount);
+	ocrFeedbackTextarea.addEventListener('keyup', updateFeedbackCharCount);
+}
+
 function formatFileSize(bytes) {
 	if(bytes === 0) return '0 Bytes';
 	var k = 1024;
@@ -931,6 +958,14 @@ function submitOCRFeedback(event) {
 	if(!orderId) {
 		errorDiv.innerHTML = 'Order ID is missing.';
 		errorDiv.style.display = 'block';
+		return false;
+	}
+	
+	// Validate feedback text is provided
+	if(!feedbackText || feedbackText.trim() === '') {
+		errorDiv.innerHTML = 'Please provide feedback text.';
+		errorDiv.style.display = 'block';
+		document.getElementById('ocrFeedbackText').focus();
 		return false;
 	}
 	
@@ -967,11 +1002,12 @@ function submitOCRFeedback(event) {
 					form.reset();
 					document.getElementById('ocrFeedbackFileList').style.display = 'none';
 					document.getElementById('ocrFeedbackFileList').innerHTML = '';
+					updateFeedbackCharCount();
 					
-					// Auto close after 3 seconds
+					// Reload page after 1.5 seconds to show updated feedback list
 					setTimeout(function() {
-						closeOCRFeedbackModal();
-					}, 3000);
+						window.location.reload();
+					}, 1500);
 				} else {
 					errorDiv.innerHTML = response.message || 'An error occurred. Please try again.';
 					errorDiv.style.display = 'block';
