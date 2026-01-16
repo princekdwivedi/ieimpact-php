@@ -840,7 +840,7 @@ if($totalCustomerOrderFils > 1){
 				</div>
 				
 				<div class="ocr-feedback-form-group">
-					<label for="ocrFeedbackFiles">Upload Files <span style="color: #999;">(Optional, Multiple files allowed)</span></label>
+					<label for="ocrFeedbackFiles">Upload Files <span style="color: #999;">(Optional, Max 10 files allowed)</span></label>
 					<input type="file" id="ocrFeedbackFiles" name="feedbackFiles[]" multiple accept="*/*">
 					<div id="ocrFeedbackFileList" class="ocr-feedback-file-list" style="display: none;"></div>
 				</div>
@@ -911,9 +911,25 @@ document.addEventListener('keydown', function(e) {
 // Show selected files
 document.getElementById('ocrFeedbackFiles').addEventListener('change', function(e) {
 	var fileList = document.getElementById('ocrFeedbackFileList');
+	var maxFiles = 10;
+	var errorDiv = document.getElementById('ocrFeedbackError');
+	
+	if(this.files.length > maxFiles) {
+		// Show error and reset file input
+		errorDiv.innerHTML = 'Maximum ' + maxFiles + ' files are allowed. Please select ' + maxFiles + ' or fewer files.';
+		errorDiv.style.display = 'block';
+		this.value = ''; // Clear the file input
+		fileList.style.display = 'none';
+		fileList.innerHTML = '';
+		return;
+	}
+	
+	// Hide error if files are within limit
+	errorDiv.style.display = 'none';
+	
 	if(this.files.length > 0) {
 		fileList.style.display = 'block';
-		var html = '<strong>Selected Files:</strong><br>';
+		var html = '<strong>Selected Files (' + this.files.length + '/' + maxFiles + '):</strong><br>';
 		for(var i = 0; i < this.files.length; i++) {
 			html += '<div class="ocr-feedback-file-item">' + (i + 1) + '. ' + this.files[i].name + ' (' + formatFileSize(this.files[i].size) + ')</div>';
 		}
@@ -966,6 +982,15 @@ function submitOCRFeedback(event) {
 		errorDiv.innerHTML = 'Please provide feedback text.';
 		errorDiv.style.display = 'block';
 		document.getElementById('ocrFeedbackText').focus();
+		return false;
+	}
+	
+	// Validate file count (max 10 files)
+	var maxFiles = 10;
+	if(files.length > maxFiles) {
+		errorDiv.innerHTML = 'Maximum ' + maxFiles + ' files are allowed. Please select ' + maxFiles + ' or fewer files.';
+		errorDiv.style.display = 'block';
+		document.getElementById('ocrFeedbackFiles').focus();
 		return false;
 	}
 	
