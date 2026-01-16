@@ -399,7 +399,7 @@ if($totalCustomerOrderFils > 1){
 				$feedbackCount = 0;
 				$feedbackResult = null;
 				if($feedbackEnabled) {
-					$feedbackQuery = "SELECT f.*, e.fullName as employeeName 
+					$feedbackQuery = "SELECT f.*, e.firstName, e.lastName 
 									  FROM ocr_data_feedback f 
 									  LEFT JOIN employee_details e ON f.userId = e.employeeId 
 									  WHERE f.orderId = $orderId 
@@ -414,7 +414,7 @@ if($totalCustomerOrderFils > 1){
 						(<a class="link_style13" onclick="downloadMultipleOrderFile('<?php echo SITE_URL_EMPLOYEES."/download-multiple-file.php?".$M_D_5_ORDERID."=".$encodeOrderID."&".$M_D_5_ID."&FILE_TYPE=OCR_RESULT";?>');" title="View AI-Extracted Property Details" style="cursor:pointer;"><b>View AI-Extracted Property Details</b></a>)
 						<?php if($feedbackEnabled): ?>
 							&nbsp;|&nbsp;
-							(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Provide Feedback" style="cursor:pointer; color: #0080C0;"><b>Add Feedback</b></a>)
+							(<a class="link_style13" onclick="openOCRFeedbackModal(<?php echo $orderId;?>);" title="Add/Review Feedback" style="cursor:pointer; color: #0080C0;"><b>Add/Review Feedback</b></a>)
 							<?php if($feedbackCount > 0): ?>
 								&nbsp;|&nbsp;
 								<span style="color: #666; font-size: 11px;">(<?php echo $feedbackCount; ?> feedback<?php echo $feedbackCount > 1 ? 's' : ''; ?> submitted)</span>
@@ -423,57 +423,6 @@ if($totalCustomerOrderFils > 1){
 					</td>
 				</tr>
 				
-				<?php if($feedbackEnabled && $feedbackCount > 0): ?>
-				<tr>
-					<td>&nbsp;</td>
-					<td colspan="2" align="left" style="padding-top: 10px;">
-						<div style="border: 1px solid #ddd; padding: 10px; background: #f9f9f9; border-radius: 4px; max-height: 300px; overflow-y: auto;">
-							<strong style="color: #333; font-size: 13px;">Submitted Feedback (<?php echo $feedbackCount; ?>):</strong>
-							<?php 
-							$fbIndex = 0;
-							while($feedbackRow = mysqli_fetch_assoc($feedbackResult)): 
-								$fbIndex++;
-								$feedbackText = stripslashes($feedbackRow['feedbackText']);
-								$feedbackFiles = json_decode($feedbackRow['feedbackFiles'], true);
-								$employeeName = !empty($feedbackRow['employeeName']) ? stripslashes($feedbackRow['employeeName']) : 'Unknown User';
-								$feedbackDate = $feedbackRow['addedOn'];
-								$feedbackTime = $feedbackRow['addedTime'];
-								$feedbackDateTime = $feedbackDate . ' ' . $feedbackTime;
-							?>
-							<div style="border-bottom: 1px solid #e0e0e0; padding: 10px 0; <?php echo $fbIndex < $feedbackCount ? 'margin-bottom: 10px;' : ''; ?>">
-								<div style="margin-bottom: 5px;">
-									<span style="font-weight: bold; color: #0080C0; font-size: 12px;"><?php echo htmlspecialchars($employeeName); ?></span>
-									<span style="color: #999; font-size: 11px; margin-left: 10px;"><?php echo date('M d, Y h:i A', strtotime($feedbackDateTime)); ?></span>
-								</div>
-								<?php if(!empty($feedbackText)): ?>
-								<div style="color: #333; font-size: 12px; margin: 5px 0; padding: 5px; background: #fff; border-left: 3px solid #0080C0;">
-									<?php echo nl2br(htmlspecialchars($feedbackText)); ?>
-								</div>
-								<?php endif; ?>
-								<?php if(!empty($feedbackFiles) && is_array($feedbackFiles) && count($feedbackFiles) > 0): ?>
-								<div style="margin-top: 5px; font-size: 11px;">
-									<strong style="color: #666;">Files:</strong>
-									<?php 
-									$fileLinks = array();
-									foreach($feedbackFiles as $file):
-										if(isset($file['path']) && file_exists($file['path'])):
-											$fileId = base64_encode($feedbackRow['id'] . '_' . $file['savedName']);
-											$fileLink = SITE_URL_EMPLOYEES . "/download-ocr-feedback-file.php?fileId=" . urlencode($fileId);
-											$fileLinks[] = '<a href="' . $fileLink . '" target="_blank" style="color: #0080C0; text-decoration: underline;">' . htmlspecialchars($file['originalName']) . '</a> (' . getFileSize($file['size']) . ')';
-										endif;
-									endforeach;
-									if(!empty($fileLinks)):
-										echo '<br>' . implode('<br>', $fileLinks);
-									endif;
-									?>
-								</div>
-								<?php endif; ?>
-							</div>
-							<?php endwhile; ?>
-						</div>
-					</td>
-				</tr>
-				<?php endif; ?>
 
 				<?php } else { 
 					// Check status file for errors or processing status
@@ -829,7 +778,7 @@ if($totalCustomerOrderFils > 1){
 <div class="ocr-feedback-modal-overlay" id="ocrFeedbackModal">
 	<div class="ocr-feedback-modal-container">
 		<div class="ocr-feedback-modal-header">
-			<h2>OCR Report Feedback</h2>
+			<h2>Add/View Feedback</h2>
 			<button type="button" class="ocr-feedback-modal-close" onclick="closeOCRFeedbackModal()" aria-label="Close">&times;</button>
 		</div>
 		<div class="ocr-feedback-modal-body">
@@ -842,14 +791,14 @@ if($totalCustomerOrderFils > 1){
 			<form id="ocrFeedbackForm" onsubmit="return submitOCRFeedback(event);">
 				<div class="ocr-feedback-form-group">
 					<label for="ocrFeedbackText">Feedback <span style="color: #999;">(Required, Max 1000 characters)</span></label>
-					<textarea id="ocrFeedbackText" name="feedbackText" placeholder="Please provide your feedback about the OCR extracted report..." rows="6" maxlength="1000" required></textarea>
+					<textarea id="ocrFeedbackText" name="feedbackText" placeholder="Please enter your feedback about the AI-Extracted result..." rows="6" maxlength="1000" required></textarea>
 					<div style="text-align: right; margin-top: 5px; font-size: 12px; color: #666;">
 						<span id="ocrFeedbackCharCount">0</span> / 1000 characters
 					</div>
 				</div>
 				
 				<div class="ocr-feedback-form-group">
-					<label for="ocrFeedbackFiles">Upload Files <span style="color: #999;">(Optional, Max 10 files allowed)</span></label>
+					<label for="ocrFeedbackFiles">Upload Files <span style="color: #999;">(Optional, Max 3 files allowed)</span></label>
 					<input type="file" id="ocrFeedbackFiles" name="feedbackFiles[]" multiple accept="*/*">
 					<div id="ocrFeedbackFileList" class="ocr-feedback-file-list" style="display: none;"></div>
 				</div>
@@ -861,6 +810,14 @@ if($totalCustomerOrderFils > 1){
 				
 				<input type="hidden" id="ocrFeedbackOrderId" name="orderId" value="">
 			</form>
+			
+			<!-- Feedback List Section -->
+			<div id="ocrFeedbackListContainer" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 20px; display: none;">
+				<strong style="color: #333; font-size: 14px; display: block; margin-bottom: 15px;">Previous Feedback:</strong>
+				<div id="ocrFeedbackListContent" style="max-height: 300px; overflow-y: auto;">
+					<!-- Feedback list will be loaded here -->
+				</div>
+			</div>
 		</div>
 	</div>
 </div>
@@ -893,8 +850,83 @@ function openOCRFeedbackModal(orderId) {
 	document.getElementById('ocrFeedbackFileList').style.display = 'none';
 	document.getElementById('ocrFeedbackFileList').innerHTML = '';
 	updateFeedbackCharCount();
+	
+	// Load feedback list
+	loadFeedbackList(orderId);
+	
 	document.getElementById('ocrFeedbackModal').style.display = 'block';
 	document.body.style.overflow = 'hidden';
+}
+
+function loadFeedbackList(orderId) {
+	var container = document.getElementById('ocrFeedbackListContainer');
+	var content = document.getElementById('ocrFeedbackListContent');
+	
+	// Show loading state
+	content.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Loading feedback...</div>';
+	container.style.display = 'block';
+	
+	// Fetch feedback list via AJAX
+	var xhr = new XMLHttpRequest();
+	xhr.open('GET', '<?php echo SITE_URL_EMPLOYEES;?>/get-ocr-feedback-list.php?orderId=' + orderId, true);
+	
+	xhr.onload = function() {
+		if(xhr.status === 200) {
+			try {
+				var response = JSON.parse(xhr.responseText);
+				if(response.success && response.feedback && response.feedback.length > 0) {
+					var html = '';
+					for(var i = 0; i < response.feedback.length; i++) {
+						var fb = response.feedback[i];
+						html += '<div style="border-bottom: 1px solid #e0e0e0; padding: 15px 0; ' + (i < response.feedback.length - 1 ? 'margin-bottom: 10px;' : '') + '">';
+						html += '<div style="margin-bottom: 8px;">';
+						html += '<span style="font-weight: bold; color: #0080C0; font-size: 12px;">' + escapeHtml(fb.employeeName) + '</span>';
+						html += '<span style="color: #999; font-size: 11px; margin-left: 10px;">' + fb.dateTime + '</span>';
+						html += '</div>';
+						if(fb.feedbackText) {
+							html += '<div style="color: #333; font-size: 12px; margin: 8px 0; padding: 8px; background: #f9f9f9; border-left: 3px solid #0080C0; border-radius: 3px;">';
+							html += escapeHtml(fb.feedbackText).replace(/\n/g, '<br>');
+							html += '</div>';
+						}
+						if(fb.files && fb.files.length > 0) {
+							html += '<div style="margin-top: 8px; font-size: 11px;">';
+							html += '<strong style="color: #666;">Files:</strong><br>';
+							for(var j = 0; j < fb.files.length; j++) {
+								var file = fb.files[j];
+								html += '<a href="' + file.downloadUrl + '" target="_blank" style="color: #0080C0; text-decoration: underline; margin-right: 15px;">' + escapeHtml(file.originalName) + '</a> (' + file.size + ')<br>';
+							}
+							html += '</div>';
+						}
+						html += '</div>';
+					}
+					content.innerHTML = html;
+				} else {
+					content.innerHTML = '<div style="text-align: center; padding: 20px; color: #999; font-style: italic;">No feedback submitted yet.</div>';
+				}
+			} catch(e) {
+				content.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">Error loading feedback list.</div>';
+			}
+		} else {
+			content.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">Error loading feedback list.</div>';
+		}
+	};
+	
+	xhr.onerror = function() {
+		content.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">Network error loading feedback list.</div>';
+	};
+	
+	xhr.send();
+}
+
+function escapeHtml(text) {
+	var map = {
+		'&': '&amp;',
+		'<': '&lt;',
+		'>': '&gt;',
+		'"': '&quot;',
+		"'": '&#039;'
+	};
+	return text ? text.replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
 }
 
 function closeOCRFeedbackModal() {
@@ -920,7 +952,7 @@ document.addEventListener('keydown', function(e) {
 // Show selected files
 document.getElementById('ocrFeedbackFiles').addEventListener('change', function(e) {
 	var fileList = document.getElementById('ocrFeedbackFileList');
-	var maxFiles = 10;
+	var maxFiles = 3;
 	var errorDiv = document.getElementById('ocrFeedbackError');
 	
 	if(this.files.length > maxFiles) {
@@ -994,8 +1026,8 @@ function submitOCRFeedback(event) {
 		return false;
 	}
 	
-	// Validate file count (max 10 files)
-	var maxFiles = 10;
+	// Validate file count (max 3 files)
+	var maxFiles = 3;
 	if(files.length > maxFiles) {
 		errorDiv.innerHTML = 'Maximum ' + maxFiles + ' files are allowed. Please select ' + maxFiles + ' or fewer files.';
 		errorDiv.style.display = 'block';
@@ -1038,9 +1070,15 @@ function submitOCRFeedback(event) {
 					document.getElementById('ocrFeedbackFileList').innerHTML = '';
 					updateFeedbackCharCount();
 					
-					// Reload page after 1.5 seconds to show updated feedback list
+					// Reload feedback list and reset form after 1.5 seconds
 					setTimeout(function() {
-						window.location.reload();
+						// Reload feedback list
+						loadFeedbackList(orderId);
+						// Reset form
+						document.getElementById('ocrFeedbackForm').reset();
+						updateFeedbackCharCount();
+						document.getElementById('ocrFeedbackFileList').style.display = 'none';
+						document.getElementById('ocrFeedbackFileList').innerHTML = '';
 					}, 1500);
 				} else {
 					errorDiv.innerHTML = response.message || 'An error occurred. Please try again.';

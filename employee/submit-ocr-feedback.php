@@ -107,8 +107,8 @@
 			$uploadedFiles = $_FILES['feedbackFiles'];
 			$fileCount = count($uploadedFiles['name']);
 			
-			// Validate maximum 10 files
-			$maxFiles = 10;
+			// Validate maximum 3 files
+			$maxFiles = 3;
 			if($fileCount > $maxFiles)
 			{
 				echo json_encode(array('success' => false, 'message' => 'Maximum ' . $maxFiles . ' files are allowed. Please select ' . $maxFiles . ' or fewer files.'));
